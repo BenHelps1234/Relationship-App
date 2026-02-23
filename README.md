@@ -22,24 +22,26 @@ Local-only Next.js + Prisma MVP implementing the specified state machines, hard 
 - `CITY_ACTIVE_THRESHOLD_OVERRIDE` dev-only city lock threshold override.
 
 ## Implemented Rules
-- Discovery: max 25 profiles/day displayed in 5x5 grid UI and max 5 likes/day.
+- Discovery: max 25 profiles/day displayed in 5x5 grid UI and max 5 likes/day (across direct/invisible/strong).
 - Discovery shown tracking: stores `DailyQuota.shownUserIdsJson`, increments `profilesShownToday`, and avoids repeated profile cards in the same day.
 - Discovery card action supports `Never see again` and permanently hides that profile for the viewer.
-- Discovery prioritizes users who sent you pending invisible likes.
+- Discovery stack order: Strong-like injection -> Invisible-like injection -> tier-distribution fill -> affinity sort.
+- Discovery is same-city only and uses age preference filtering.
 - Conversations: max 5 active chats per user and 15 total-message cap with gated "Schedule 20-min Video Date" CTA (stub).
 - Active conversation cap is enforced for both users before conversation creation.
 - Unmatch endpoint: `POST /api/unmatch` sets `conversation.state=ended`, immediately freeing an active slot.
 - Likes expire strictly by `expiresAt` + cron/script.
-- Like types: `direct` (visible in `/likes-you`) and `invisible` (discovery-priority nudge).
+- Like types: `direct` (visible in `/likes-you`), `invisible` (discovery-priority nudge), and `strong` (visible in `/strong-likes`).
+- Strong likes support explicit accept/pass resolution from inbox.
+- Pass action is tracked as preference signal without scoring penalty.
 - Freeze flow sets `isFrozen` and `partnerId`; frozen users removed from discovery and blocked from like/message APIs.
 - Waitlist city lock if city active users < 1000 with progress + roadmap.
-- Waitlist jump system: while city is locked, complete 2 Yes/No reviews per 24h cycle to increase waitlist priority score.
+- Waitlist jump system: while city is locked, each Yes/No review increases waitlist priority score.
+- Waitlist review queue is cross-city, excludes prior-reviewed targets forever, and has a daily cap.
 - Active user definition: account is `active`, not frozen, and `lastActiveAt` within the last 30 days.
 - City status is computed from active users and refreshed on waitlist/discovery reads and in seed flow.
 - MPS weighted scoring, tiers, roadmap next-best actions, and history log.
-- Peer review gate requires one anonymous Yes/No vote every 24 hours before discovery unlocks.
 - Peer-review targets are never repeated for the same rater (`raterUserId + ratedUserId` unique).
-- If a user has exhausted all eligible review targets, gate is bypassed for 24 hours to avoid deadlock.
 - For MVP pairing: male rates female, female rates male, non-binary can rate either male/female pool.
 - Filters page supports preferred age min/max. Discovery applies viewer-side age range only (no symmetry enforcement in MVP).
 - Odds bubble uses real per-profile daily likes (`ProfileDailyStat.likesReceived`) + MPS tier gap.

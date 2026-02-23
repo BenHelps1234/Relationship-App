@@ -3,20 +3,11 @@ import { roadmapActions } from '@/lib/mps';
 import { getSessionUser } from '@/lib/session-user';
 import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
 import { Nav } from '@/components/Nav';
-import { ensureWaitlistState, isEligibleForWaitlistJump, waitlistRank, WAITLIST_JUMP_REVIEWS_REQUIRED } from '@/lib/waitlist';
+import { ensureWaitlistState, waitlistRank, WAITLIST_DAILY_REVIEW_CAP, waitlistReviewsTodayCount } from '@/lib/waitlist';
 
 type WaitlistPageProps = {
   searchParams?: { jump?: string };
 };
-
-function countdownText(until: Date): string {
-  const ms = until.getTime() - Date.now();
-  if (ms <= 0) return 'Now';
-  const totalMinutes = Math.ceil(ms / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${hours}h ${minutes}m`;
-}
 
 export default async function WaitlistPage({ searchParams }: WaitlistPageProps) {
   const user = await getSessionUser();
@@ -31,14 +22,12 @@ export default async function WaitlistPage({ searchParams }: WaitlistPageProps) 
 
   const state = await ensureWaitlistState(user.id, user.cityId);
   const rank = await waitlistRank(user.cityId, user.id);
-  const eligibleNow = isEligibleForWaitlistJump(state.nextEligibleAt);
-  const progress = Math.min(WAITLIST_JUMP_REVIEWS_REQUIRED, state.reviewsCompletedSinceLastGate);
+  const reviewsToday = await waitlistReviewsTodayCount(user.id);
+  const canReview = reviewsToday < WAITLIST_DAILY_REVIEW_CAP;
 
   const prior = await prisma.peerReview.findMany({ where: { raterUserId: user.id }, select: { ratedUserId: true } });
   const ratedUserIds = prior.map((p) => p.ratedUserId);
-  const remainingNeeded = Math.max(0, WAITLIST_JUMP_REVIEWS_REQUIRED - progress);
-
-  const candidates = !cityLocked || !eligibleNow || remainingNeeded <= 0
+  const candidates = !cityLocked || !canReview
     ? []
     : await prisma.user.findMany({
         where: {
@@ -47,7 +36,7 @@ export default async function WaitlistPage({ searchParams }: WaitlistPageProps) 
           isFrozen: false
         },
         include: { profile: true },
-        take: remainingNeeded
+        take: 2
       });
 
   return (
@@ -72,18 +61,12 @@ export default async function WaitlistPage({ searchParams }: WaitlistPageProps) 
       {cityLocked ? (
         <div className="card space-y-2">
           <h2 className="font-medium">Complete peer reviews to jump ahead</h2>
-          {eligibleNow ? (
-            <>
-              <p>Complete {WAITLIST_JUMP_REVIEWS_REQUIRED} yes/no reviews to jump ahead.</p>
-              <p>{progress}/{WAITLIST_JUMP_REVIEWS_REQUIRED} completed for today's jump.</p>
-            </>
-          ) : (
-            <p>Next jump eligibility in: {state.nextEligibleAt ? countdownText(state.nextEligibleAt) : 'Now'}</p>
-          )}
+          <p>Each yes/no review increases your waitlist priority score by 1.</p>
+          <p>Reviews completed today: {reviewsToday}/{WAITLIST_DAILY_REVIEW_CAP}</p>
         </div>
       ) : null}
 
-      {cityLocked && eligibleNow ? (
+      {cityLocked && canReview ? (
         <div className="space-y-2">
           <p className="font-semibold">Waitlist review queue (cross-city, no repeats)</p>
           {candidates.length === 0 ? <p className="card">No reviews available right now.</p> : null}
@@ -99,6 +82,7 @@ export default async function WaitlistPage({ searchParams }: WaitlistPageProps) 
           ))}
         </div>
       ) : null}
+      {cityLocked && !canReview ? <p className="card">Daily waitlist review cap reached. Return tomorrow for more jumps.</p> : null}
 
       <div className="card">
         <h2 className="font-medium">Improvement Roadmap</h2>

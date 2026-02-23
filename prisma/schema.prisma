@@ -27,6 +27,7 @@ enum LikeStatus {
 enum LikeType {
   direct
   invisible
+  strong
 }
 
 enum PeerVote {
@@ -81,6 +82,8 @@ model User {
   hiddenUsers               HiddenProfile[]    @relation("HiddenUsers")
   hiddenByUsers             HiddenProfile[]    @relation("HiddenByUsers")
   waitlistState             WaitlistState?
+  passSignals               PassSignal[]       @relation("PassSignalsByUser")
+  passedBySignals           PassSignal[]       @relation("PassSignalsToUser")
 }
 
 model Profile {
@@ -216,4 +219,15 @@ model WaitlistState {
   nextEligibleAt                   DateTime?
   totalReviewsCompletedLifetime    Int      @default(0)
   updatedAt                        DateTime @updatedAt
+}
+
+model PassSignal {
+  id           String   @id @default(cuid())
+  userId       String
+  targetUserId String
+  user         User     @relation("PassSignalsByUser", fields: [userId], references: [id])
+  targetUser   User     @relation("PassSignalsToUser", fields: [targetUserId], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, targetUserId])
 }

@@ -3,7 +3,7 @@ import { PeerVote, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getSessionUserId } from '@/lib/session-user';
 import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
-import { ensureWaitlistState, isEligibleForWaitlistJump, WAITLIST_JUMP_REVIEWS_REQUIRED, waitlistNextEligible } from '@/lib/waitlist';
+import { ensureWaitlistState, WAITLIST_DAILY_REVIEW_CAP, waitlistReviewsTodayCount } from '@/lib/waitlist';
 
 const MIN_SECONDS_BETWEEN_REVIEWS = 5;
 
@@ -41,10 +41,14 @@ export async function POST(req: Request) {
     orderBy: { createdAt: 'desc' }
   });
   if (recent) return new Response('Please wait a moment before reviewing again.', { status: 429 });
+  const reviewsToday = await waitlistReviewsTodayCount(user.id);
+  if (reviewsToday >= WAITLIST_DAILY_REVIEW_CAP) {
+    return new Response('Daily waitlist review cap reached.', { status: 400 });
+  }
 
   await ensureWaitlistState(user.id, user.cityId);
 
-  let jumpAwarded = false;
+  let jumped = false;
   try {
     await prisma.$transaction(async (tx) => {
       await tx.peerReview.create({
@@ -59,37 +63,16 @@ export async function POST(req: Request) {
       if (!state) throw new Error('missing_waitlist_state');
 
       const now = new Date();
-      const eligibleForJump = isEligibleForWaitlistJump(state.nextEligibleAt, now);
-
-      if (eligibleForJump) {
-        const cycleCount = state.reviewsCompletedSinceLastGate + 1;
-        if (cycleCount >= WAITLIST_JUMP_REVIEWS_REQUIRED) {
-          jumpAwarded = true;
-          await tx.waitlistState.update({
-            where: { userId: user.id },
-            data: {
-              priorityScore: { increment: 1 },
-              priorityUpdatedAt: now,
-              reviewsCompletedSinceLastGate: 0,
-              nextEligibleAt: waitlistNextEligible(now),
-              totalReviewsCompletedLifetime: { increment: 1 }
-            }
-          });
-        } else {
-          await tx.waitlistState.update({
-            where: { userId: user.id },
-            data: {
-              reviewsCompletedSinceLastGate: cycleCount,
-              totalReviewsCompletedLifetime: { increment: 1 }
-            }
-          });
+      jumped = true;
+      await tx.waitlistState.update({
+        where: { userId: user.id },
+        data: {
+          priorityScore: { increment: 1 },
+          priorityUpdatedAt: now,
+          reviewsCompletedSinceLastGate: { increment: 1 },
+          totalReviewsCompletedLifetime: { increment: 1 }
         }
-      } else {
-        await tx.waitlistState.update({
-          where: { userId: user.id },
-          data: { totalReviewsCompletedLifetime: { increment: 1 } }
-        });
-      }
+      });
 
       await tx.user.update({ where: { id: user.id }, data: { lastActiveAt: now } });
     });
@@ -100,5 +83,5 @@ export async function POST(req: Request) {
     throw error;
   }
 
-  redirect(jumpAwarded ? '/waitlist?jump=1' : '/waitlist');
+  redirect(jumped ? '/waitlist?jump=1' : '/waitlist');
 }

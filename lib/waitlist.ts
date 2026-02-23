@@ -1,7 +1,5 @@
 import { prisma } from './prisma';
-
-export const WAITLIST_JUMP_REVIEWS_REQUIRED = 2;
-export const WAITLIST_JUMP_COOLDOWN_HOURS = 24;
+export const WAITLIST_DAILY_REVIEW_CAP = 20;
 
 export async function ensureWaitlistState(userId: string, cityId: string) {
   return prisma.waitlistState.upsert({
@@ -11,12 +9,18 @@ export async function ensureWaitlistState(userId: string, cityId: string) {
   });
 }
 
-export function isEligibleForWaitlistJump(nextEligibleAt: Date | null | undefined, now = new Date()): boolean {
-  return !nextEligibleAt || nextEligibleAt <= now;
-}
-
-export function waitlistNextEligible(now = new Date()): Date {
-  return new Date(now.getTime() + WAITLIST_JUMP_COOLDOWN_HOURS * 3600 * 1000);
+export async function waitlistReviewsTodayCount(userId: string): Promise<number> {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return prisma.peerReview.count({
+    where: {
+      raterUserId: userId,
+      createdAt: { gte: start, lt: end }
+    }
+  });
 }
 
 export async function waitlistRank(cityId: string, userId: string): Promise<number> {
@@ -39,4 +43,3 @@ export async function waitlistRank(cityId: string, userId: string): Promise<numb
 
   return ahead + 1;
 }
-

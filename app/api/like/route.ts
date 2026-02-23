@@ -10,7 +10,16 @@ import { ensureDailyQuotaFresh } from '@/lib/quota';
 const LIKE_EXPIRY_MS = 48 * 3600 * 1000;
 
 function parseLikeType(raw: FormDataEntryValue | null): LikeType {
-  return String(raw || 'direct') === 'invisible' ? LikeType.invisible : LikeType.direct;
+  const value = String(raw || 'direct');
+  if (value === 'invisible') return LikeType.invisible;
+  if (value === 'strong') return LikeType.strong;
+  return LikeType.direct;
+}
+
+function likeTypeRank(type: LikeType): number {
+  if (type === LikeType.strong) return 3;
+  if (type === LikeType.direct) return 2;
+  return 1;
 }
 
 async function activeConversationCount(tx: Prisma.TransactionClient, userId: string): Promise<number> {
@@ -75,8 +84,8 @@ export async function POST(req: Request) {
       }
 
       if (existing.status === 'pending' && now < existing.expiresAt) {
-        if (existing.type === 'invisible' && requestedType === 'direct') {
-          await tx.like.update({ where: { id: existing.id }, data: { type: 'direct', expiresAt } });
+        if (likeTypeRank(requestedType) > likeTypeRank(existing.type)) {
+          await tx.like.update({ where: { id: existing.id }, data: { type: requestedType, expiresAt } });
           return { kind: 'upgraded' as const };
         }
         return { kind: 'already-liked' as const };
