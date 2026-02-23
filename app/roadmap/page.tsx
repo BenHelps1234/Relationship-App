@@ -1,10 +1,12 @@
 import { prisma } from '@/lib/prisma';
-import { mpsTier, roadmapActions, tierWeight } from '@/lib/mps';
+import { mpsTier, roadmapActions } from '@/lib/mps';
 import { getSessionUser } from '@/lib/session-user';
+import { ensurePeerReviewGateState } from '@/lib/peer-review';
 
 export default async function RoadmapPage() {
   const user = await getSessionUser();
   if (!user) return <p>No user.</p>;
+  const gate = await ensurePeerReviewGateState(user.id);
   const history = await prisma.mpsHistory.findMany({ where: { userId: user.id }, orderBy: { timestamp: 'asc' } });
   const targetGenders =
     user.gender === 'male'
@@ -12,8 +14,15 @@ export default async function RoadmapPage() {
       : user.gender === 'female'
         ? ['male']
         : ['male', 'female'];
+  const prior = await prisma.peerReview.findMany({ where: { raterUserId: user.id }, select: { ratedUserId: true } });
+  const ratedUserIds = prior.map((p) => p.ratedUserId);
   const opposites = await prisma.user.findMany({
-    where: { gender: { in: targetGenders }, id: { not: user.id } },
+    where: {
+      gender: { in: targetGenders },
+      id: { notIn: [user.id, ...ratedUserIds] },
+      accountStatus: 'active',
+      isFrozen: false
+    },
     include: { profile: true },
     take: 2
   });
@@ -32,14 +41,18 @@ export default async function RoadmapPage() {
         {history.map((h) => <p key={h.id} className="text-xs">{h.timestamp.toISOString()}: {h.mpsValue.toFixed(2)}</p>)}
       </div>
       <div className="space-y-2">
-        <p className="font-semibold">Peer review queue (photo only, anonymous)</p>
+        <p className="font-semibold">Peer review queue (photo only, anonymous, Yes/No)</p>
+        {gate.bypassedDueToExhaustion && gate.message ? <p className="card">{gate.message}</p> : null}
+        {opposites.length === 0 ? <p className="card">No reviews available right now.</p> : null}
         {opposites.map((o) => (
           <form key={o.id} action="/api/peer-review" method="post" className="card space-y-2">
             <img src={o.profile?.photoMainUrl} alt="rate" className="h-44 w-full rounded object-cover" />
             <input type="hidden" name="ratedUserId" value={o.id} />
-            <p className="text-xs">No identity details shown. Weight for your rating tier now: {tierWeight(user.mpsCurrent)}x</p>
-            <input className="card w-full" name="rating" type="number" min={1} max={10} defaultValue={5} />
-            <button className="underline">Submit 1-10</button>
+            <p className="text-xs">No identity details shown. Equal-weight Yes/No review.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button className="card w-full" name="vote" value="yes">Yes</button>
+              <button className="card w-full" name="vote" value="no">No</button>
+            </div>
           </form>
         ))}
       </div>

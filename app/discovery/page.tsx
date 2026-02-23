@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { getSessionUser } from '@/lib/session-user';
 import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
 import { todayKey } from '@/lib/daily-stats';
+import { effectiveAgeRange } from '@/lib/filters';
+import { ensurePeerReviewGateState } from '@/lib/peer-review';
 
 export default async function DiscoveryPage() {
   const user = await getSessionUser();
@@ -18,8 +20,9 @@ export default async function DiscoveryPage() {
     return <main><Nav /><p className="card">Discovery locked for low-city liquidity. <Link href="/waitlist" className="underline">Go to waitlist.</Link></p></main>;
   }
 
-  if ((user.dailyQuota?.peerReviewsCompleted ?? 0) < 2) {
-    return <main><Nav /><p className="card">Complete 2 anonymous opposite-sex photo ratings first in <Link href="/roadmap" className="underline">Roadmap / Review Queue</Link>.</p></main>;
+  const gate = await ensurePeerReviewGateState(user.id);
+  if (gate.required) {
+    return <main><Nav /><p className="card">Complete 1 anonymous Yes/No peer review first in <Link href="/roadmap" className="underline">Roadmap / Review Queue</Link>.</p></main>;
   }
 
   const quota = user.dailyQuota;
@@ -30,6 +33,7 @@ export default async function DiscoveryPage() {
   });
   const hiddenUserIds = hidden.map((h) => h.hiddenUserId);
   const remainingSlots = Math.max(0, DAILY_PROFILE_LIMIT - (quota?.profilesShownToday ?? 0));
+  const ageRange = effectiveAgeRange(user.age, user.preferredAgeMin, user.preferredAgeMax);
 
   const invisibleLikesToViewer = await prisma.like.findMany({
     where: {
@@ -48,7 +52,8 @@ export default async function DiscoveryPage() {
     where: {
       id: { in: invisiblePriorityIds },
       isFrozen: false,
-      accountStatus: 'active'
+      accountStatus: 'active',
+      age: { gte: ageRange.min, lte: ageRange.max }
     },
     include: {
       profile: true,
@@ -62,7 +67,8 @@ export default async function DiscoveryPage() {
     where: {
       id: { notIn: [user.id, ...shownUserIds, ...hiddenUserIds, ...priorityCandidates.map((p) => p.id)] },
       isFrozen: false,
-      accountStatus: 'active'
+      accountStatus: 'active',
+      age: { gte: ageRange.min, lte: ageRange.max }
     },
     include: {
       profile: true,
@@ -92,6 +98,7 @@ export default async function DiscoveryPage() {
       <Nav />
       <h1 className="text-xl">Discovery 5x5</h1>
       <p className="card">Shown today: {shownCount}/25 | Likes left: {quota?.likesRemaining ?? 0}/5</p>
+      {gate.bypassedDueToExhaustion && gate.message ? <p className="card">{gate.message}</p> : null}
       {limitReached ? <p className="card">Daily profile limit reached. Come back after local midnight.</p> : null}
       <div className="grid grid-cols-5 gap-1">
         {candidates.slice(0, 25).map((p) => {

@@ -6,6 +6,10 @@ import { bmiScore, weightedMps } from '@/lib/mps';
 
 export async function POST(req: Request) {
   const body = await req.json();
+  const age = Number(body.age);
+  if (!Number.isInteger(age) || age < 18) {
+    return NextResponse.json({ error: 'Age must be an integer and at least 18.' }, { status: 400 });
+  }
   const zipPrefix = String(body.zip).slice(0, 3);
   const city = await prisma.city.findUnique({ where: { zipPrefix } });
   if (!city) return NextResponse.json({ error: 'Unknown zip prefix in seed city map.' }, { status: 400 });
@@ -23,6 +27,7 @@ export async function POST(req: Request) {
         email: body.email,
         passwordHash: hashed,
         gender: body.gender,
+        age,
         zip: body.zip,
         cityId: city.id,
         mpsCurrent: mps,

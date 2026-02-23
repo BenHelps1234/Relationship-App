@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 
 export default function OnboardingPage() {
-  const [form, setForm] = useState({ email: '', password: '', gender: 'male', zip: '', bio: '', photoMainUrl: '', incomeSelfReported: 0, heightCm: 170, weightKg: 70 });
+  const [form, setForm] = useState({ email: '', password: '', gender: 'male', age: 25, zip: '', bio: '', photoMainUrl: '', incomeSelfReported: 0, heightCm: 170, weightKg: 70 });
   const [result, setResult] = useState('');
 
   async function submit() {
@@ -25,7 +25,7 @@ export default function OnboardingPage() {
           className="card w-full"
           placeholder={key}
           value={String(value)}
-          onChange={(e) => setForm((f) => ({ ...f, [key]: ['incomeSelfReported','heightCm','weightKg'].includes(key) ? Number(e.target.value) : e.target.value }))}
+          onChange={(e) => setForm((f) => ({ ...f, [key]: ['age','incomeSelfReported','heightCm','weightKg'].includes(key) ? Number(e.target.value) : e.target.value }))}
         />
       ))}
       <button className="card w-full" onClick={submit}>Create account</button>

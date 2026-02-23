@@ -28,12 +28,14 @@ async function main() {
     const resources = 3 + (i % 5);
     const reliability = 3 + (i % 4);
     const safety = i % 3 === 0 ? 8 : 4;
+    const age = 20 + (i % 18);
     const mps = weightedMps({ physicality, resources, reliability, safety });
     const user = await prisma.user.create({
       data: {
         email: `user${i}@demo.local`,
         passwordHash: pass,
         gender,
+        age,
         zip: cityId === nyc.id ? '10001' : '94105',
         cityId,
         lastActiveAt: i <= 24 ? new Date() : new Date(Date.now() - 40 * 24 * 3600 * 1000),
@@ -42,7 +44,7 @@ async function main() {
         scoreResources: resources,
         scoreReliability: reliability,
         scoreSafety: safety,
-        dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 2, resetAt: new Date() } },
+        dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 0, resetAt: new Date() } },
         profile: {
           create: {
             bio: 'MVP profile',

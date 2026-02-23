@@ -36,9 +36,11 @@ Local-only Next.js + Prisma MVP implementing the specified state machines, hard 
 - Active user definition: account is `active`, not frozen, and `lastActiveAt` within the last 30 days.
 - City status is computed from active users and refreshed on waitlist/discovery reads and in seed flow.
 - MPS weighted scoring, tiers, roadmap next-best actions, and history log.
-- Peer review loop requires anonymous photo-only 1-10 ratings, stores raw + normalized + weighted scores.
-- Peer-review normalization assumption: rater mean-centering (`raw - rater_mean`) clamped to [-3, +3].
+- Peer review gate requires one anonymous Yes/No vote every 24 hours before discovery unlocks.
+- Peer-review targets are never repeated for the same rater (`raterUserId + ratedUserId` unique).
+- If a user has exhausted all eligible review targets, gate is bypassed for 24 hours to avoid deadlock.
 - For MVP pairing: male rates female, female rates male, non-binary can rate either male/female pool.
+- Filters page supports preferred age min/max. Discovery applies viewer-side age range only (no symmetry enforcement in MVP).
 - Odds bubble uses real per-profile daily likes (`ProfileDailyStat.likesReceived`) + MPS tier gap.
 - Ban state: `accountStatus` with login blocked for `banned`.
 
@@ -59,7 +61,7 @@ API wrappers call these directly (no shelling out):
 
 ## Assumptions
 - Server pages and APIs use authenticated session user (`getServerSession`) as the acting user.
-- Opposite-sex peer review uses male/female pairing only for this MVP gate.
+- Peer review pairing uses male->female, female->male, and non-binary->male/female.
 - Daily counters and day keys use local server calendar date.
 - Daily quotas auto-heal per user if `resetAt` is before today (while keeping cron scripts available).
 

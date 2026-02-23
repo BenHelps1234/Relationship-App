@@ -17,6 +17,9 @@ CREATE TABLE "User" (
   "email" TEXT NOT NULL UNIQUE,
   "passwordHash" TEXT NOT NULL,
   "gender" TEXT NOT NULL,
+  "age" INTEGER NOT NULL,
+  "preferredAgeMin" INTEGER,
+  "preferredAgeMax" INTEGER,
   "zip" TEXT NOT NULL,
   "cityId" TEXT NOT NULL,
   "isFrozen" BOOLEAN NOT NULL DEFAULT false,
@@ -31,6 +34,7 @@ CREATE TABLE "User" (
   "scoreSafety" REAL NOT NULL DEFAULT 1.0,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt" DATETIME NOT NULL,
+  "peerReviewBypassUntil" DATETIME,
   FOREIGN KEY ("cityId") REFERENCES "City" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   FOREIGN KEY ("partnerId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -86,13 +90,12 @@ CREATE TABLE "PeerReview" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "raterUserId" TEXT NOT NULL,
   "ratedUserId" TEXT NOT NULL,
-  "rawRating" INTEGER NOT NULL,
-  "normalizedRating" REAL NOT NULL,
-  "weightApplied" REAL NOT NULL,
+  "voteYes" BOOLEAN NOT NULL,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY ("raterUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   FOREIGN KEY ("ratedUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX "PeerReview_raterUserId_ratedUserId_key" ON "PeerReview"("raterUserId", "ratedUserId");
 CREATE TABLE "MpsHistory" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "userId" TEXT NOT NULL,
