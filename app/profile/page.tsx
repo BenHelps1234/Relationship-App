@@ -10,6 +10,8 @@ export default async function ProfilePage() {
       <p className="card">Unchangeable traits are explicitly excluded from MPS calculations.</p>
       <img src={user.profile.photoMainUrl} alt="main" className="card h-56 w-full object-cover" />
       <p className="card">Photo captured at: {user.profile.photoCapturedAt.toISOString()} (camera-required architecture ready; upload simulated now)</p>
+      <p className="card">Contact email: {user.contactEmail || 'Not set'}</p>
+      <p className="card">Contact phone: {user.contactPhone || 'Not set'}</p>
     </main>
   );
 }

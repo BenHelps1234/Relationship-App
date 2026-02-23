@@ -34,6 +34,9 @@ export async function POST(req: Request) {
   const senderCountAfter = senderCount + 1;
   const totalAfter = convo.messageCountTotal + 1;
   const nextState = conversationStateAfterMessage(senderCountAfter);
+  if (nextState === 'gated_to_video' && convo.state !== 'gated_to_video') {
+    console.info(`[message] conversation gated conversation=${conversationId} sender=${user.id}`);
+  }
   await prisma.$transaction([
     prisma.message.create({ data: { conversationId, senderId: user.id, body } }),
     prisma.conversation.update({

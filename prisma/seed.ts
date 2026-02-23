@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { weightedMps } from '@/lib/mps';
 import { refreshCityStatus } from '@/lib/city';
 import { todayKey } from '@/lib/daily-stats';
+import { pairKey } from '@/lib/pairs';
 
 async function main() {
   await prisma.profileDailyStat.deleteMany();
@@ -70,6 +71,47 @@ async function main() {
         likesReceived: i % 12
       }
     });
+  }
+
+  const users = await prisma.user.findMany({ orderBy: { email: 'asc' } });
+  const [u1, u2, u3, u4, u5, u6, u7, u8, u9, u10] = users;
+  if (u1 && u2 && u3 && u4 && u5 && u6 && u7 && u8 && u9 && u10) {
+    const staleCreatedAt = new Date(Date.now() - 73 * 3600 * 1000);
+    await prisma.conversation.create({
+      data: {
+        pairKey: pairKey(u1.id, u2.id),
+        participantAId: u1.id,
+        participantBId: u2.id,
+        state: 'active',
+        createdAt: staleCreatedAt
+      }
+    });
+
+    await prisma.conversation.create({
+      data: {
+        pairKey: pairKey(u3.id, u4.id),
+        participantAId: u3.id,
+        participantBId: u4.id,
+        state: 'gated_to_video',
+        messageCountTotal: 15,
+        messageCountByA: 15,
+        messageCountByB: 0,
+        lastMessageAt: new Date()
+      }
+    });
+
+    const capPartners = [u6, u7, u8, u9, u10];
+    for (const partner of capPartners) {
+      await prisma.conversation.create({
+        data: {
+          pairKey: pairKey(u5.id, partner.id),
+          participantAId: u5.id,
+          participantBId: partner.id,
+          state: 'active',
+          lastMessageAt: new Date()
+        }
+      });
+    }
   }
 
   await refreshCityStatus();

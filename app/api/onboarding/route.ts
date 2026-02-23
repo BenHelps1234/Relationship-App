@@ -28,6 +28,8 @@ export async function POST(req: Request) {
         passwordHash: hashed,
         gender: body.gender,
         age,
+        contactEmail: body.contactEmail ? String(body.contactEmail) : null,
+        contactPhone: body.contactPhone ? String(body.contactPhone) : null,
         zip: body.zip,
         cityId: city.id,
         mpsCurrent: mps,

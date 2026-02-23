@@ -13,6 +13,8 @@ export default async function ConversationDetail({ params }: { params: { id: str
   const senderCount = convo.participantAId === userId ? convo.messageCountByA : convo.messageCountByB;
   const otherCount = convo.participantAId === userId ? convo.messageCountByB : convo.messageCountByA;
   const gated = convo.state === 'gated_to_video' || senderCount >= MESSAGE_CAP || otherCount >= MESSAGE_CAP;
+  const ended = convo.state === 'ended' || !!convo.endedAt;
+  const textDisabled = gated || ended;
   const baseline = convo.lastMessageAt ?? convo.createdAt;
   const remainingHours = Math.max(0, Math.ceil((72 * 3600 * 1000 - (Date.now() - baseline.getTime())) / (3600 * 1000)));
   const contactAcceptedByMe = convo.participantAId === userId ? convo.contactShareAcceptedByUserA : convo.contactShareAcceptedByUserB;
@@ -82,8 +84,8 @@ export default async function ConversationDetail({ params }: { params: { id: str
       {convo.messages.map((m) => <p className="card" key={m.id}>{m.body}</p>)}
       <form action="/api/message" method="post" className="space-y-2">
         <input type="hidden" name="conversationId" value={convo.id} />
-        <input className="card w-full" name="body" placeholder={gated ? 'Message disabled at cap.' : 'Type message'} disabled={gated} />
-        <button className="card w-full" disabled={gated}>Send</button>
+        <input className="card w-full" name="body" placeholder={textDisabled ? 'Messaging is disabled for this conversation.' : 'Type message'} disabled={textDisabled} />
+        <button className="card w-full" disabled={textDisabled}>Send</button>
       </form>
       <form action="/api/unmatch" method="post">
         <input type="hidden" name="conversationId" value={convo.id} />

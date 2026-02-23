@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 
 export default function OnboardingPage() {
-  const [form, setForm] = useState({ email: '', password: '', gender: 'male', age: 25, zip: '', bio: '', photoMainUrl: '', incomeSelfReported: 0, heightCm: 170, weightKg: 70 });
+  const [form, setForm] = useState({ email: '', password: '', gender: 'male', age: 25, contactEmail: '', contactPhone: '', zip: '', bio: '', photoMainUrl: '', incomeSelfReported: 0, heightCm: 170, weightKg: 70 });
   const [result, setResult] = useState('');
 
   async function submit() {

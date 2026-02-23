@@ -1,13 +1,8 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from './prisma';
-
-const INACTIVITY_MS = 72 * 3600 * 1000;
+import { isConversationInactive } from './domain';
 
 export type DbLike = PrismaClient | Prisma.TransactionClient;
-
-export function isConversationStale(referenceTime: Date, now = new Date()): boolean {
-  return now.getTime() - referenceTime.getTime() >= INACTIVITY_MS;
-}
 
 export async function runExpireConversations(db: DbLike = prisma) {
   const now = new Date();
@@ -17,7 +12,7 @@ export async function runExpireConversations(db: DbLike = prisma) {
   });
 
   const staleIds = candidates
-    .filter((c) => isConversationStale(c.lastMessageAt ?? c.createdAt, now))
+    .filter((c) => isConversationInactive(c.lastMessageAt ?? c.createdAt, now))
     .map((c) => c.id);
 
   if (staleIds.length === 0) return { count: 0 };
