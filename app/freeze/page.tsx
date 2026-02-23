@@ -1,7 +1,7 @@
-import { getDemoUser } from '@/lib/current-user';
+import { getSessionUser } from '@/lib/session-user';
 
 export default async function FreezePage() {
-  const user = await getDemoUser();
+  const user = await getSessionUser();
   if (!user) return <p>No user.</p>;
 
   return (

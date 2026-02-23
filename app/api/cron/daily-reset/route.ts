@@ -1,7 +1,7 @@
-import { execSync } from 'node:child_process';
 import { NextResponse } from 'next/server';
+import { runDailyReset } from '@/scripts/daily-reset';
 
 export async function POST() {
-  execSync('npm run cron:daily', { stdio: 'inherit' });
+  await runDailyReset();
   return NextResponse.json({ ok: true });
 }

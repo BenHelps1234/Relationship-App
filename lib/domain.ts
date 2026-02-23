@@ -5,9 +5,8 @@ export const DAILY_LIKE_LIMIT = 5;
 export const ACTIVE_CONVERSATION_LIMIT = 5;
 export const MESSAGE_CAP = 15;
 
-export function nextLikeStatus(createdAt: Date, now: Date, current: LikeStatus): LikeStatus {
+export function nextLikeStatus(expiresAt: Date, now: Date, current: LikeStatus): LikeStatus {
   if (current !== LikeStatus.pending) return current;
-  const expiresAt = new Date(createdAt.getTime() + 48 * 60 * 60 * 1000);
   return now >= expiresAt ? LikeStatus.expired : LikeStatus.pending;
 }
 

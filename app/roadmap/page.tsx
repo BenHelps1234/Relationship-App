@@ -1,9 +1,9 @@
 import { prisma } from '@/lib/prisma';
-import { getDemoUser } from '@/lib/current-user';
 import { mpsTier, roadmapActions, tierWeight } from '@/lib/mps';
+import { getSessionUser } from '@/lib/session-user';
 
 export default async function RoadmapPage() {
-  const user = await getDemoUser();
+  const user = await getSessionUser();
   if (!user) return <p>No user.</p>;
   const history = await prisma.mpsHistory.findMany({ where: { userId: user.id }, orderBy: { timestamp: 'asc' } });
   const opposites = await prisma.user.findMany({

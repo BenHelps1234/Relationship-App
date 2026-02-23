@@ -1,17 +1,33 @@
 import { redirect } from 'next/navigation';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { getDemoUser } from '@/lib/current-user';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
+import { getSessionUserId } from '@/lib/session-user';
+import { incrementDailyLikesReceived } from '@/lib/daily-stats';
+
+async function activeConversationCount(tx: Prisma.TransactionClient, userId: string): Promise<number> {
+  return tx.conversation.count({
+    where: {
+      state: { in: ['active', 'gated_to_video'] },
+      OR: [{ participantAId: userId }, { participantBId: userId }]
+    }
+  });
+}
 
 export async function POST(req: Request) {
-  const user = await getDemoUser();
+  const userId = await getSessionUserId();
+  if (!userId) return new Response('Unauthorized', { status: 401 });
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: { dailyQuota: true } });
   if (!user) return new Response('No user', { status: 400 });
   if (user.isFrozen) return new Response('Frozen accounts cannot like.', { status: 403 });
+
   const form = await req.formData();
   const toUserId = String(form.get('toUserId'));
+  if (!toUserId || toUserId === user.id) return new Response('Invalid target user', { status: 400 });
 
-  const quota = await prisma.dailyQuota.findUnique({ where: { userId: user.id } });
-  if (!quota || quota.likesRemaining <= 0) return new Response('Daily like limit reached.', { status: 400 });
+  if (!user.dailyQuota || user.dailyQuota.likesRemaining <= 0) {
+    return new Response('Daily like limit reached.', { status: 400 });
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.like.create({
@@ -22,17 +38,17 @@ export async function POST(req: Request) {
         status: 'pending'
       }
     });
+
+    await incrementDailyLikesReceived(toUserId, tx as any);
+
     await tx.dailyQuota.update({ where: { userId: user.id }, data: { likesRemaining: { decrement: 1 } } });
 
     const reciprocal = await tx.like.findFirst({ where: { fromUserId: toUserId, toUserId: user.id, status: 'pending' } });
     if (reciprocal) {
-      const activeConversations = await tx.conversation.count({
-        where: {
-          state: { in: ['active', 'gated_to_video'] },
-          OR: [{ participantAId: user.id }, { participantBId: user.id }]
-        }
-      });
-      if (activeConversations < ACTIVE_CONVERSATION_LIMIT) {
+      const requesterActiveCount = await activeConversationCount(tx, user.id);
+      const targetActiveCount = await activeConversationCount(tx, toUserId);
+
+      if (requesterActiveCount < ACTIVE_CONVERSATION_LIMIT && targetActiveCount < ACTIVE_CONVERSATION_LIMIT) {
         await tx.like.updateMany({
           where: {
             OR: [
@@ -45,6 +61,8 @@ export async function POST(req: Request) {
         await tx.conversation.create({ data: { participantAId: user.id, participantBId: toUserId, state: 'active' } });
       }
     }
+
+    await tx.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
   });
 
   redirect('/discovery');

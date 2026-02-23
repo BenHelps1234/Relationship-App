@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
-import { getDemoUser } from '@/lib/current-user';
+import { getSessionUser } from '@/lib/session-user';
 import { Nav } from '@/components/Nav';
 
 export default async function ConversationsPage() {
-  const user = await getDemoUser();
-  if (!user) return <p>Create a user first.</p>;
+  const user = await getSessionUser();
+  if (!user) return <p>User not found.</p>;
   const conversations = await prisma.conversation.findMany({
     where: {
       OR: [{ participantAId: user.id }, { participantBId: user.id }],

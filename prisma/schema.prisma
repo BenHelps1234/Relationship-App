@@ -32,36 +32,38 @@ enum ConversationState {
 }
 
 model User {
-  id                      String           @id @default(cuid())
-  email                   String           @unique
-  passwordHash            String
-  gender                  Gender
-  zip                     String
-  cityId                  String
-  city                    City             @relation(fields: [cityId], references: [id])
-  isFrozen                Boolean          @default(false)
-  partnerId               String?
-  partner                 User?            @relation("PartnerLink", fields: [partnerId], references: [id])
-  partneredBy             User[]           @relation("PartnerLink")
-  accountStatus           AccountStatus    @default(active)
-  riskFingerprintHash     String?
-  mpsCurrent              Float            @default(1.0)
-  scorePhysicality        Float            @default(1.0)
-  scoreResources          Float            @default(1.0)
-  scoreReliability        Float            @default(1.0)
-  scoreSafety             Float            @default(1.0)
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
-  profile                 Profile?
-  sentLikes               Like[]           @relation("SentLikes")
-  receivedLikes           Like[]           @relation("ReceivedLikes")
-  participantAConversations Conversation[] @relation("ParticipantA")
-  participantBConversations Conversation[] @relation("ParticipantB")
-  sentMessages            Message[]
-  writtenPeerReviews      PeerReview[]     @relation("WrittenReviews")
-  receivedPeerReviews     PeerReview[]     @relation("ReceivedReviews")
-  mpsHistory              MpsHistory[]
-  dailyQuota              DailyQuota?
+  id                        String             @id @default(cuid())
+  email                     String             @unique
+  passwordHash              String
+  gender                    Gender
+  zip                       String
+  cityId                    String
+  city                      City               @relation(fields: [cityId], references: [id])
+  isFrozen                  Boolean            @default(false)
+  partnerId                 String?
+  partner                   User?              @relation("PartnerLink", fields: [partnerId], references: [id])
+  partneredBy               User[]             @relation("PartnerLink")
+  accountStatus             AccountStatus      @default(active)
+  riskFingerprintHash       String?
+  lastActiveAt              DateTime           @default(now())
+  mpsCurrent                Float              @default(1.0)
+  scorePhysicality          Float              @default(1.0)
+  scoreResources            Float              @default(1.0)
+  scoreReliability          Float              @default(1.0)
+  scoreSafety               Float              @default(1.0)
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
+  profile                   Profile?
+  sentLikes                 Like[]             @relation("SentLikes")
+  receivedLikes             Like[]             @relation("ReceivedLikes")
+  participantAConversations Conversation[]     @relation("ParticipantA")
+  participantBConversations Conversation[]     @relation("ParticipantB")
+  sentMessages              Message[]
+  writtenPeerReviews        PeerReview[]       @relation("WrittenReviews")
+  receivedPeerReviews       PeerReview[]       @relation("ReceivedReviews")
+  mpsHistory                MpsHistory[]
+  dailyQuota                DailyQuota?
+  profileDailyStats         ProfileDailyStat[] @relation("ProfileStats")
 }
 
 model Profile {
@@ -91,16 +93,16 @@ model Like {
 }
 
 model Conversation {
-  id                 String            @id @default(cuid())
-  participantAId     String
-  participantBId     String
-  participantA       User              @relation("ParticipantA", fields: [participantAId], references: [id])
-  participantB       User              @relation("ParticipantB", fields: [participantBId], references: [id])
-  messageCountTotal  Int               @default(0)
-  state              ConversationState @default(active)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  messages           Message[]
+  id                String            @id @default(cuid())
+  participantAId    String
+  participantBId    String
+  participantA      User              @relation("ParticipantA", fields: [participantAId], references: [id])
+  participantB      User              @relation("ParticipantB", fields: [participantBId], references: [id])
+  messageCountTotal Int               @default(0)
+  state             ConversationState @default(active)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  messages          Message[]
 }
 
 model Message {
@@ -156,6 +158,17 @@ model DailyQuota {
   user                 User     @relation(fields: [userId], references: [id])
   likesRemaining       Int      @default(5)
   profilesShownToday   Int      @default(0)
+  shownUserIdsJson     String   @default("[]")
   peerReviewsCompleted Int      @default(0)
   resetAt              DateTime
+}
+
+model ProfileDailyStat {
+  id            String @id @default(cuid())
+  profileUserId String
+  profileUser   User   @relation("ProfileStats", fields: [profileUserId], references: [id])
+  statDate      String
+  likesReceived Int    @default(0)
+
+  @@unique([profileUserId, statDate])
 }

@@ -1,7 +1,7 @@
-import { getDemoUser } from '@/lib/current-user';
+import { getSessionUser } from '@/lib/session-user';
 
 export default async function ProfilePage() {
-  const user = await getDemoUser();
+  const user = await getSessionUser();
   if (!user?.profile) return <p>No profile.</p>;
   return (
     <main className="space-y-3">

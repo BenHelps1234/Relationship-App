@@ -1,10 +1,12 @@
 import { prisma } from '@/lib/prisma';
-import { getDemoUser } from '@/lib/current-user';
 import { roadmapActions } from '@/lib/mps';
+import { getSessionUser } from '@/lib/session-user';
+import { refreshCityStatus } from '@/lib/city';
 
 export default async function WaitlistPage() {
-  const user = await getDemoUser();
-  if (!user) return <p>Create a user in onboarding first.</p>;
+  const user = await getSessionUser();
+  if (!user) return <p>User not found.</p>;
+  await refreshCityStatus(user.cityId);
   const status = await prisma.cityStatus.findUnique({ where: { cityId: user.cityId } });
   const current = status?.totalUsersActive ?? 0;
   const threshold = status?.threshold ?? 1000;
@@ -20,7 +22,7 @@ export default async function WaitlistPage() {
       <div className="card">
         <h2 className="font-medium">Improvement Roadmap</h2>
         {roadmapActions({ physicality: user.scorePhysicality, resources: user.scoreResources, reliability: user.scoreReliability, safety: user.scoreSafety }).map((x) => (
-          <p key={x.component} className="text-sm">{x.component}: {x.current.toFixed(1)} ? {x.nextAction} ({x.projectedDelta > 0 ? '+' : ''}{x.projectedDelta})</p>
+          <p key={x.component} className="text-sm">{x.component}: {x.current.toFixed(1)} -> {x.nextAction} ({x.projectedDelta > 0 ? '+' : ''}{x.projectedDelta})</p>
         ))}
       </div>
     </main>

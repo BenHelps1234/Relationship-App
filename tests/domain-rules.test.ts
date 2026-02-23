@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { conversationStateAfterMessage, nextLikeStatus, canSendMessage, MESSAGE_CAP } from '@/lib/domain';
 
-test('likes expire after 48h when pending', () => {
-  const createdAt = new Date('2024-01-01T00:00:00Z');
+test('likes expire strictly from expiresAt when pending', () => {
+  const expiresAt = new Date('2024-01-03T00:00:00Z');
   const after = new Date('2024-01-03T00:00:01Z');
-  assert.equal(nextLikeStatus(createdAt, after, 'pending'), 'expired');
+  assert.equal(nextLikeStatus(expiresAt, after, 'pending'), 'expired');
 });
 
 test('conversation gates at 15 messages', () => {

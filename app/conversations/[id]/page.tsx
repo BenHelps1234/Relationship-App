@@ -20,6 +20,10 @@ export default async function ConversationDetail({ params }: { params: { id: str
         <input className="card w-full" name="body" placeholder={gated ? 'Message disabled at cap.' : 'Type message'} disabled={gated} />
         <button className="card w-full" disabled={gated}>Send</button>
       </form>
+      <form action="/api/unmatch" method="post">
+        <input type="hidden" name="conversationId" value={convo.id} />
+        <button className="card w-full">Unmatch / End conversation</button>
+      </form>
     </main>
   );
 }

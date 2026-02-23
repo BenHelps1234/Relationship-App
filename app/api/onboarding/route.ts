@@ -28,7 +28,8 @@ export async function POST(req: Request) {
       scoreResources: resources,
       scoreReliability: reliability,
       scoreSafety: safety,
-      dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, peerReviewsCompleted: 0, resetAt: new Date() } },
+      lastActiveAt: new Date(),
+      dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 0, resetAt: new Date() } },
       profile: {
         create: {
           bio: body.bio,

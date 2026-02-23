@@ -23,6 +23,7 @@ CREATE TABLE "User" (
   "partnerId" TEXT,
   "accountStatus" TEXT NOT NULL DEFAULT 'active',
   "riskFingerprintHash" TEXT,
+  "lastActiveAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "mpsCurrent" REAL NOT NULL DEFAULT 1.0,
   "scorePhysicality" REAL NOT NULL DEFAULT 1.0,
   "scoreResources" REAL NOT NULL DEFAULT 1.0,
@@ -100,7 +101,16 @@ CREATE TABLE "DailyQuota" (
   "userId" TEXT NOT NULL PRIMARY KEY,
   "likesRemaining" INTEGER NOT NULL DEFAULT 5,
   "profilesShownToday" INTEGER NOT NULL DEFAULT 0,
+  "shownUserIdsJson" TEXT NOT NULL DEFAULT '[]',
   "peerReviewsCompleted" INTEGER NOT NULL DEFAULT 0,
   "resetAt" DATETIME NOT NULL,
   FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
+CREATE TABLE "ProfileDailyStat" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "profileUserId" TEXT NOT NULL,
+  "statDate" TEXT NOT NULL,
+  "likesReceived" INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY ("profileUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX "ProfileDailyStat_profileUserId_statDate_key" ON "ProfileDailyStat"("profileUserId", "statDate");

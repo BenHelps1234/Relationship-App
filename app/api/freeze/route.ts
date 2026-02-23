@@ -1,10 +1,13 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { getDemoUser } from '@/lib/current-user';
+import { getSessionUserId } from '@/lib/session-user';
 
 export async function POST(req: Request) {
-  const user = await getDemoUser();
+  const userId = await getSessionUserId();
+  if (!userId) return new Response('Unauthorized', { status: 401 });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return new Response('No user', { status: 400 });
+
   const form = await req.formData();
   const action = String(form.get('action') || 'freeze');
 

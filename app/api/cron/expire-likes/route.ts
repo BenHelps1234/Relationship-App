@@ -1,7 +1,7 @@
-import { execSync } from 'node:child_process';
 import { NextResponse } from 'next/server';
+import { runExpireLikes } from '@/scripts/expire-likes';
 
 export async function POST() {
-  execSync('npm run cron:expire-likes', { stdio: 'inherit' });
-  return NextResponse.json({ ok: true });
+  const result = await runExpireLikes();
+  return NextResponse.json({ ok: true, expired: result.count });
 }
