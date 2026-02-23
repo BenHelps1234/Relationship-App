@@ -7,6 +7,7 @@ export async function POST(req: Request) {
   if (!userId) return new Response('Unauthorized', { status: 401 });
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return new Response('No user', { status: 400 });
+  if (user.accountStatus !== 'active') return new Response('Account not allowed.', { status: 403 });
 
   const form = await req.formData();
   const action = String(form.get('action') || 'freeze');
@@ -18,6 +19,8 @@ export async function POST(req: Request) {
 
   const partnerId = String(form.get('partnerId'));
   if (!partnerId) return new Response('Missing partnerId', { status: 400 });
+  const partner = await prisma.user.findUnique({ where: { id: partnerId } });
+  if (!partner || partner.accountStatus !== 'active') return new Response('Partner unavailable.', { status: 400 });
 
   await prisma.$transaction([
     prisma.user.update({ where: { id: user.id }, data: { isFrozen: true, partnerId } }),

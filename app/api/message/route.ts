@@ -8,7 +8,14 @@ export async function POST(req: Request) {
   if (!userId) return new Response('Unauthorized', { status: 401 });
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return new Response('No user', { status: 400 });
-  if (user.isFrozen) return new Response('Frozen accounts cannot message.', { status: 403 });
+  if (user.accountStatus !== 'active') {
+    console.warn(`[message] blocked banned/inactive user=${user.id}`);
+    return new Response('Account not allowed.', { status: 403 });
+  }
+  if (user.isFrozen) {
+    console.warn(`[message] blocked frozen user=${user.id}`);
+    return new Response('Frozen accounts cannot message.', { status: 403 });
+  }
 
   const form = await req.formData();
   const conversationId = String(form.get('conversationId'));
@@ -18,7 +25,10 @@ export async function POST(req: Request) {
   if (!convo) return new Response('Not found', { status: 404 });
   const isParticipant = convo.participantAId === user.id || convo.participantBId === user.id;
   if (!isParticipant) return new Response('Forbidden', { status: 403 });
-  if (!canSendMessage(convo.state, convo.messageCountTotal)) return new Response('Message cap reached', { status: 400 });
+  if (!canSendMessage(convo.state, convo.messageCountTotal)) {
+    console.info(`[message] gate block conversation=${conversationId} count=${convo.messageCountTotal}`);
+    return new Response('Message cap reached', { status: 400 });
+  }
 
   const count = convo.messageCountTotal + 1;
   await prisma.$transaction([

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { bmiScore, weightedMps } from '@/lib/mps';
 
@@ -16,39 +17,46 @@ export async function POST(req: Request) {
   const safety = 1;
   const mps = weightedMps({ physicality, resources, reliability, safety });
 
-  const user = await prisma.user.create({
-    data: {
-      email: body.email,
-      passwordHash: hashed,
-      gender: body.gender,
-      zip: body.zip,
-      cityId: city.id,
-      mpsCurrent: mps,
-      scorePhysicality: physicality,
-      scoreResources: resources,
-      scoreReliability: reliability,
-      scoreSafety: safety,
-      lastActiveAt: new Date(),
-      dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 0, resetAt: new Date() } },
-      profile: {
-        create: {
-          bio: body.bio,
-          photoMainUrl: body.photoMainUrl || 'https://picsum.photos/300',
-          photoCapturedAt: new Date(),
-          incomeSelfReported: Number(body.incomeSelfReported || 0),
-          heightCm: Number(body.heightCm || 0),
-          weightKg: Number(body.weightKg || 0),
-          profileCompletion: 70
-        }
-      },
-      mpsHistory: {
-        create: {
-          mpsValue: mps,
-          componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety })
+  try {
+    const user = await prisma.user.create({
+      data: {
+        email: body.email,
+        passwordHash: hashed,
+        gender: body.gender,
+        zip: body.zip,
+        cityId: city.id,
+        mpsCurrent: mps,
+        scorePhysicality: physicality,
+        scoreResources: resources,
+        scoreReliability: reliability,
+        scoreSafety: safety,
+        lastActiveAt: new Date(),
+        dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 0, resetAt: new Date() } },
+        profile: {
+          create: {
+            bio: body.bio,
+            photoMainUrl: body.photoMainUrl || 'https://picsum.photos/300',
+            photoCapturedAt: new Date(),
+            incomeSelfReported: Number(body.incomeSelfReported || 0),
+            heightCm: Number(body.heightCm || 0),
+            weightKg: Number(body.weightKg || 0),
+            profileCompletion: 70
+          }
+        },
+        mpsHistory: {
+          create: {
+            mpsValue: mps,
+            componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety })
+          }
         }
       }
-    }
-  });
+    });
 
-  return NextResponse.json({ ok: true, userId: user.id });
+    return NextResponse.json({ ok: true, userId: user.id });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ error: 'Email already exists.' }, { status: 400 });
+    }
+    throw error;
+  }
 }

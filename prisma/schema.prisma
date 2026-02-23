@@ -24,6 +24,11 @@ enum LikeStatus {
   expired
 }
 
+enum LikeType {
+  direct
+  invisible
+}
+
 enum ConversationState {
   active
   gated_to_video
@@ -92,10 +97,14 @@ model Like {
   createdAt  DateTime   @default(now())
   expiresAt  DateTime
   status     LikeStatus @default(pending)
+  type       LikeType   @default(direct)
+
+  @@unique([fromUserId, toUserId])
 }
 
 model Conversation {
   id                String            @id @default(cuid())
+  pairKey           String            @unique
   participantAId    String
   participantBId    String
   participantA      User              @relation("ParticipantA", fields: [participantAId], references: [id])

@@ -5,6 +5,8 @@ import { getSessionUserId } from '@/lib/session-user';
 export async function POST(req: Request) {
   const userId = await getSessionUserId();
   if (!userId) return new Response('Unauthorized', { status: 401 });
+  const actor = await prisma.user.findUnique({ where: { id: userId } });
+  if (!actor || actor.accountStatus !== 'active') return new Response('Account not allowed.', { status: 403 });
 
   const form = await req.formData();
   const hiddenUserId = String(form.get('hiddenUserId') || '');

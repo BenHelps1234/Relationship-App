@@ -1,9 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { MESSAGE_CAP } from '@/lib/domain';
+import { getSessionUserId } from '@/lib/session-user';
 
 export default async function ConversationDetail({ params }: { params: { id: string } }) {
+  const userId = await getSessionUserId();
+  if (!userId) return <p>Unauthorized.</p>;
   const convo = await prisma.conversation.findUnique({ where: { id: params.id }, include: { messages: { orderBy: { createdAt: 'asc' } } } });
   if (!convo) return <p>Conversation not found.</p>;
+  if (convo.participantAId !== userId && convo.participantBId !== userId) return <p>Forbidden.</p>;
   const gated = convo.messageCountTotal >= MESSAGE_CAP || convo.state === 'gated_to_video';
 
   return (

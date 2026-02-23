@@ -27,3 +27,11 @@ export async function refreshCityStatus(cityId?: string) {
     });
   }
 }
+
+export function effectiveCityThreshold(cityThreshold: number): number {
+  if (process.env.NODE_ENV === 'production') return cityThreshold;
+  const raw = process.env.CITY_ACTIVE_THRESHOLD_OVERRIDE;
+  const parsed = Number(raw);
+  if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  return cityThreshold;
+}

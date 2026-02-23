@@ -55,11 +55,13 @@ CREATE TABLE "Like" (
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "expiresAt" DATETIME NOT NULL,
   "status" TEXT NOT NULL DEFAULT 'pending',
+  "type" TEXT NOT NULL DEFAULT 'direct',
   FOREIGN KEY ("fromUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   FOREIGN KEY ("toUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 CREATE TABLE "Conversation" (
   "id" TEXT NOT NULL PRIMARY KEY,
+  "pairKey" TEXT NOT NULL,
   "participantAId" TEXT NOT NULL,
   "participantBId" TEXT NOT NULL,
   "messageCountTotal" INTEGER NOT NULL DEFAULT 0,
@@ -69,6 +71,8 @@ CREATE TABLE "Conversation" (
   FOREIGN KEY ("participantAId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   FOREIGN KEY ("participantBId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
+CREATE UNIQUE INDEX "Like_fromUserId_toUserId_key" ON "Like"("fromUserId", "toUserId");
+CREATE UNIQUE INDEX "Conversation_pairKey_key" ON "Conversation"("pairKey");
 CREATE TABLE "Message" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "conversationId" TEXT NOT NULL,

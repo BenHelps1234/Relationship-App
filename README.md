@@ -19,15 +19,18 @@ Local-only Next.js + Prisma MVP implementing the specified state machines, hard 
 - `NEXTAUTH_URL`
 - `NEXTAUTH_SECRET`
 - `SIGNUP_FEE_PLACEHOLDER` UI text only.
+- `CITY_ACTIVE_THRESHOLD_OVERRIDE` dev-only city lock threshold override.
 
 ## Implemented Rules
 - Discovery: max 25 profiles/day displayed in 5x5 grid UI and max 5 likes/day.
 - Discovery shown tracking: stores `DailyQuota.shownUserIdsJson`, increments `profilesShownToday`, and avoids repeated profile cards in the same day.
 - Discovery card action supports `Never see again` and permanently hides that profile for the viewer.
+- Discovery prioritizes users who sent you pending invisible likes.
 - Conversations: max 5 active chats per user and 15 total-message cap with gated "Schedule 20-min Video Date" CTA (stub).
 - Active conversation cap is enforced for both users before conversation creation.
 - Unmatch endpoint: `POST /api/unmatch` sets `conversation.state=ended`, immediately freeing an active slot.
 - Likes expire strictly by `expiresAt` + cron/script.
+- Like types: `direct` (visible in `/likes-you`) and `invisible` (discovery-priority nudge).
 - Freeze flow sets `isFrozen` and `partnerId`; frozen users removed from discovery and blocked from like/message APIs.
 - Waitlist city lock if city active users < 1000 with progress + roadmap.
 - Active user definition: account is `active`, not frozen, and `lastActiveAt` within the last 30 days.
@@ -58,6 +61,7 @@ API wrappers call these directly (no shelling out):
 - Server pages and APIs use authenticated session user (`getServerSession`) as the acting user.
 - Opposite-sex peer review uses male/female pairing only for this MVP gate.
 - Daily counters and day keys use local server calendar date.
+- Daily quotas auto-heal per user if `resetAt` is before today (while keeping cron scripts available).
 
 ## Testing
 - `npm test` validates key state machine logic (like expiry + 15-message gate).

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { roadmapActions } from '@/lib/mps';
 import { getSessionUser } from '@/lib/session-user';
-import { refreshCityStatus } from '@/lib/city';
+import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
 
 export default async function WaitlistPage() {
   const user = await getSessionUser();
@@ -9,7 +9,7 @@ export default async function WaitlistPage() {
   await refreshCityStatus(user.cityId);
   const status = await prisma.cityStatus.findUnique({ where: { cityId: user.cityId } });
   const current = status?.totalUsersActive ?? 0;
-  const threshold = status?.threshold ?? 1000;
+  const threshold = effectiveCityThreshold(status?.threshold ?? 1000);
   const pct = Math.min(100, Math.round((current / threshold) * 100));
 
   return (

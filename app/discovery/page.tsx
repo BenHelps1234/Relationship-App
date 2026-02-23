@@ -4,7 +4,7 @@ import { oddsYouMatch } from '@/lib/odds';
 import { Nav } from '@/components/Nav';
 import Link from 'next/link';
 import { getSessionUser } from '@/lib/session-user';
-import { refreshCityStatus } from '@/lib/city';
+import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
 import { todayKey } from '@/lib/daily-stats';
 
 export default async function DiscoveryPage() {
@@ -13,7 +13,8 @@ export default async function DiscoveryPage() {
 
   await refreshCityStatus(user.cityId);
   const cityStatus = await prisma.cityStatus.findUnique({ where: { cityId: user.cityId } });
-  if ((cityStatus?.totalUsersActive ?? 0) < 1000) {
+  const threshold = effectiveCityThreshold(cityStatus?.threshold ?? 1000);
+  if ((cityStatus?.totalUsersActive ?? 0) < threshold) {
     return <main><Nav /><p className="card">Discovery locked for low-city liquidity. <Link href="/waitlist" className="underline">Go to waitlist.</Link></p></main>;
   }
 
@@ -30,9 +31,22 @@ export default async function DiscoveryPage() {
   const hiddenUserIds = hidden.map((h) => h.hiddenUserId);
   const remainingSlots = Math.max(0, DAILY_PROFILE_LIMIT - (quota?.profilesShownToday ?? 0));
 
-  const candidates = await prisma.user.findMany({
+  const invisibleLikesToViewer = await prisma.like.findMany({
     where: {
-      id: { notIn: [user.id, ...shownUserIds, ...hiddenUserIds] },
+      toUserId: user.id,
+      status: 'pending',
+      type: 'invisible',
+      expiresAt: { gt: new Date() }
+    },
+    select: { fromUserId: true }
+  });
+  const invisiblePriorityIds = Array.from(new Set(invisibleLikesToViewer.map((l) => l.fromUserId))).filter(
+    (id) => id !== user.id && !shownUserIds.includes(id) && !hiddenUserIds.includes(id)
+  );
+
+  const priorityCandidates = invisiblePriorityIds.length === 0 ? [] : await prisma.user.findMany({
+    where: {
+      id: { in: invisiblePriorityIds },
       isFrozen: false,
       accountStatus: 'active'
     },
@@ -42,6 +56,21 @@ export default async function DiscoveryPage() {
     },
     take: remainingSlots
   });
+
+  const remainingAfterPriority = Math.max(0, remainingSlots - priorityCandidates.length);
+  const normalCandidates = await prisma.user.findMany({
+    where: {
+      id: { notIn: [user.id, ...shownUserIds, ...hiddenUserIds, ...priorityCandidates.map((p) => p.id)] },
+      isFrozen: false,
+      accountStatus: 'active'
+    },
+    include: {
+      profile: true,
+      profileDailyStats: { where: { statDate: todayKey() }, take: 1 }
+    },
+    take: remainingAfterPriority
+  });
+  const candidates = [...priorityCandidates, ...normalCandidates];
 
   if (quota && candidates.length > 0) {
     await prisma.dailyQuota.update({
@@ -53,7 +82,10 @@ export default async function DiscoveryPage() {
     });
   }
   const shownCount = (quota?.profilesShownToday ?? 0) + candidates.length;
-  const limitReached = remainingSlots <= 0;
+  const limitReached = shownCount >= DAILY_PROFILE_LIMIT;
+  if (limitReached) {
+    console.info(`[discovery] daily profile cap reached user=${user.id} shown=${shownCount}`);
+  }
 
   return (
     <main className="space-y-3">
@@ -73,7 +105,13 @@ export default async function DiscoveryPage() {
               {p.profile?.verificationStatus === 'passed' ? <p className="text-sky-300">Blue Tint badge</p> : null}
               <form action="/api/like" method="post">
                 <input type="hidden" name="toUserId" value={p.id} />
-                <button className="underline">Like</button>
+                <input type="hidden" name="type" value="direct" />
+                <button className="underline">Direct Like</button>
+              </form>
+              <form action="/api/like" method="post">
+                <input type="hidden" name="toUserId" value={p.id} />
+                <input type="hidden" name="type" value="invisible" />
+                <button className="underline">Invisible Like</button>
               </form>
               <form action="/api/hide-profile" method="post">
                 <input type="hidden" name="hiddenUserId" value={p.id} />

@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from './auth';
 import { prisma } from './prisma';
+import { ensureDailyQuotaFresh } from './quota';
 
 export async function getSessionUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions);
@@ -18,8 +19,11 @@ export async function requireSessionUserId(): Promise<string> {
 export async function getSessionUser() {
   const userId = await getSessionUserId();
   if (!userId) return null;
-  return prisma.user.findUnique({
+  await ensureDailyQuotaFresh(userId);
+  const user = await prisma.user.findUnique({
     where: { id: userId },
     include: { profile: true, dailyQuota: true }
   });
+  if (!user || user.accountStatus !== 'active') return null;
+  return user;
 }
