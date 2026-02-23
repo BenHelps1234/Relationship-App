@@ -90,7 +90,7 @@ CREATE TABLE "PeerReview" (
   "id" TEXT NOT NULL PRIMARY KEY,
   "raterUserId" TEXT NOT NULL,
   "ratedUserId" TEXT NOT NULL,
-  "voteYes" BOOLEAN NOT NULL,
+  "vote" TEXT NOT NULL,
   "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY ("raterUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
   FOREIGN KEY ("ratedUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
@@ -129,3 +129,15 @@ CREATE TABLE "HiddenProfile" (
 );
 CREATE UNIQUE INDEX "ProfileDailyStat_profileUserId_statDate_key" ON "ProfileDailyStat"("profileUserId", "statDate");
 CREATE UNIQUE INDEX "HiddenProfile_userId_hiddenUserId_key" ON "HiddenProfile"("userId", "hiddenUserId");
+CREATE TABLE "WaitlistState" (
+  "userId" TEXT NOT NULL PRIMARY KEY,
+  "cityId" TEXT NOT NULL,
+  "priorityScore" INTEGER NOT NULL DEFAULT 0,
+  "priorityUpdatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "reviewsCompletedSinceLastGate" INTEGER NOT NULL DEFAULT 0,
+  "nextEligibleAt" DATETIME,
+  "totalReviewsCompletedLifetime" INTEGER NOT NULL DEFAULT 0,
+  "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  FOREIGN KEY ("cityId") REFERENCES "City" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);

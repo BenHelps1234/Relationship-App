@@ -53,7 +53,8 @@ export async function POST(req: Request) {
             mpsValue: mps,
             componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety })
           }
-        }
+        },
+        waitlistState: { create: { cityId: city.id } }
       }
     });
 

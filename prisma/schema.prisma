@@ -29,6 +29,11 @@ enum LikeType {
   invisible
 }
 
+enum PeerVote {
+  yes
+  no
+}
+
 enum ConversationState {
   active
   gated_to_video
@@ -75,6 +80,7 @@ model User {
   profileDailyStats         ProfileDailyStat[] @relation("ProfileStats")
   hiddenUsers               HiddenProfile[]    @relation("HiddenUsers")
   hiddenByUsers             HiddenProfile[]    @relation("HiddenByUsers")
+  waitlistState             WaitlistState?
 }
 
 model Profile {
@@ -136,7 +142,7 @@ model PeerReview {
   ratedUserId      String
   raterUser        User     @relation("WrittenReviews", fields: [raterUserId], references: [id])
   ratedUser        User     @relation("ReceivedReviews", fields: [ratedUserId], references: [id])
-  voteYes          Boolean
+  vote             PeerVote
   createdAt        DateTime @default(now())
 
   @@unique([raterUserId, ratedUserId])
@@ -149,6 +155,7 @@ model City {
   threshold  Int         @default(1000)
   users      User[]
   cityStatus CityStatus?
+  waitlistStates WaitlistState[]
 }
 
 model CityStatus {
@@ -196,4 +203,17 @@ model HiddenProfile {
   hiddenUser   User   @relation("HiddenByUsers", fields: [hiddenUserId], references: [id])
 
   @@unique([userId, hiddenUserId])
+}
+
+model WaitlistState {
+  userId                           String   @id
+  user                             User     @relation(fields: [userId], references: [id])
+  cityId                           String
+  city                             City     @relation(fields: [cityId], references: [id])
+  priorityScore                    Int      @default(0)
+  priorityUpdatedAt                DateTime @default(now())
+  reviewsCompletedSinceLastGate    Int      @default(0)
+  nextEligibleAt                   DateTime?
+  totalReviewsCompletedLifetime    Int      @default(0)
+  updatedAt                        DateTime @updatedAt
 }

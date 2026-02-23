@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { Prisma } from '@prisma/client';
+import { PeerVote, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getSessionUserId } from '@/lib/session-user';
 import { ensureDailyQuotaFresh } from '@/lib/quota';
@@ -22,8 +22,8 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const ratedUserId = String(form.get('ratedUserId'));
   const voteRaw = String(form.get('vote') || '').toLowerCase();
-  const voteYes = voteRaw === 'yes' ? true : voteRaw === 'no' ? false : null;
-  if (voteYes === null) return new Response('Invalid vote.', { status: 400 });
+  const vote = voteRaw === 'yes' ? PeerVote.yes : voteRaw === 'no' ? PeerVote.no : null;
+  if (!vote) return new Response('Invalid vote.', { status: 400 });
   const ratedUser = await prisma.user.findUnique({ where: { id: ratedUserId } });
   if (!ratedUser || ratedUser.accountStatus !== 'active' || ratedUser.isFrozen) {
     return new Response('Rated user unavailable.', { status: 400 });
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
         data: {
           raterUserId: user.id,
           ratedUserId,
-          voteYes
+          vote
         }
       }),
       prisma.dailyQuota.update({ where: { userId: user.id }, data: { peerReviewsCompleted: { increment: 1 } } }),

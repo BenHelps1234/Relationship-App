@@ -33,6 +33,7 @@ Local-only Next.js + Prisma MVP implementing the specified state machines, hard 
 - Like types: `direct` (visible in `/likes-you`) and `invisible` (discovery-priority nudge).
 - Freeze flow sets `isFrozen` and `partnerId`; frozen users removed from discovery and blocked from like/message APIs.
 - Waitlist city lock if city active users < 1000 with progress + roadmap.
+- Waitlist jump system: while city is locked, complete 2 Yes/No reviews per 24h cycle to increase waitlist priority score.
 - Active user definition: account is `active`, not frozen, and `lastActiveAt` within the last 30 days.
 - City status is computed from active users and refreshed on waitlist/discovery reads and in seed flow.
 - MPS weighted scoring, tiers, roadmap next-best actions, and history log.

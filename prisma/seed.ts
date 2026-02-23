@@ -12,6 +12,7 @@ async function main() {
   await prisma.like.deleteMany();
   await prisma.mpsHistory.deleteMany();
   await prisma.dailyQuota.deleteMany();
+  await prisma.waitlistState.deleteMany();
   await prisma.profile.deleteMany();
   await prisma.user.deleteMany();
   await prisma.cityStatus.deleteMany();
@@ -57,7 +58,8 @@ async function main() {
             verificationStatus: i % 5 === 0 ? 'passed' : 'unverified'
           }
         },
-        mpsHistory: { create: { mpsValue: mps, componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety }) } }
+        mpsHistory: { create: { mpsValue: mps, componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety }) } },
+        waitlistState: { create: { cityId } }
       }
     });
 
