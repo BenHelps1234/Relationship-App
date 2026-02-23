@@ -42,6 +42,14 @@ enum ConversationState {
   frozen
 }
 
+enum VideoDateStatus {
+  none
+  proposed
+  scheduled
+  completed
+  expired
+}
+
 model User {
   id                        String             @id @default(cuid())
   email                     String             @unique
@@ -50,6 +58,8 @@ model User {
   age                       Int
   preferredAgeMin           Int?
   preferredAgeMax           Int?
+  contactEmail              String?
+  contactPhone              String?
   zip                       String
   cityId                    String
   city                      City               @relation(fields: [cityId], references: [id])
@@ -123,7 +133,18 @@ model Conversation {
   participantA      User              @relation("ParticipantA", fields: [participantAId], references: [id])
   participantB      User              @relation("ParticipantB", fields: [participantBId], references: [id])
   messageCountTotal Int               @default(0)
+  messageCountByA   Int               @default(0)
+  messageCountByB   Int               @default(0)
+  lastMessageAt     DateTime?
   state             ConversationState @default(active)
+  endedAt           DateTime?
+  videoDateStatus   VideoDateStatus   @default(none)
+  videoDateStartsAt DateTime?
+  videoDateEndsAt   DateTime?
+  contactShareProposedAt DateTime?
+  contactShareAcceptedByUserA Boolean @default(false)
+  contactShareAcceptedByUserB Boolean @default(false)
+  contactInfoSharedAt DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   messages          Message[]

@@ -25,15 +25,27 @@ export async function POST(req: Request) {
   if (!convo) return new Response('Not found', { status: 404 });
   const isParticipant = convo.participantAId === user.id || convo.participantBId === user.id;
   if (!isParticipant) return new Response('Forbidden', { status: 403 });
-  if (!canSendMessage(convo.state, convo.messageCountTotal)) {
-    console.info(`[message] gate block conversation=${conversationId} count=${convo.messageCountTotal}`);
+  const senderCount = convo.participantAId === user.id ? convo.messageCountByA : convo.messageCountByB;
+  if (!canSendMessage(convo.state, senderCount)) {
+    console.info(`[message] gate block conversation=${conversationId} senderCount=${senderCount}`);
     return new Response('Message cap reached', { status: 400 });
   }
 
-  const count = convo.messageCountTotal + 1;
+  const senderCountAfter = senderCount + 1;
+  const totalAfter = convo.messageCountTotal + 1;
+  const nextState = conversationStateAfterMessage(senderCountAfter);
   await prisma.$transaction([
     prisma.message.create({ data: { conversationId, senderId: user.id, body } }),
-    prisma.conversation.update({ where: { id: conversationId }, data: { messageCountTotal: count, state: conversationStateAfterMessage(count) } }),
+    prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        messageCountTotal: totalAfter,
+        messageCountByA: convo.participantAId === user.id ? senderCountAfter : convo.messageCountByA,
+        messageCountByB: convo.participantBId === user.id ? senderCountAfter : convo.messageCountByB,
+        state: nextState,
+        lastMessageAt: new Date()
+      }
+    }),
     prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } })
   ]);
 

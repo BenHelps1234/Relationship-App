@@ -3,14 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { getSessionUserId } from '@/lib/session-user';
 import { pairKey } from '@/lib/pairs';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
+import { activeMatchCount } from '@/lib/match';
 
 async function activeConversationCount(userId: string): Promise<number> {
-  return prisma.conversation.count({
-    where: {
-      state: { in: ['active', 'gated_to_video'] },
-      OR: [{ participantAId: userId }, { participantBId: userId }]
-    }
-  });
+  return activeMatchCount(userId);
 }
 
 export async function POST(req: Request) {
@@ -44,20 +40,34 @@ export async function POST(req: Request) {
     return new Response('Conversation cap reached. Resolve existing chats first.', { status: 400 });
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.like.update({ where: { id: like.id }, data: { status: 'matched' } });
-    await tx.like.upsert({
-      where: { fromUserId_toUserId: { fromUserId: userId, toUserId: fromUser.id } },
-      update: { status: 'matched', type: 'direct', expiresAt: new Date(Date.now() + 48 * 3600 * 1000) },
-      create: { fromUserId: userId, toUserId: fromUser.id, status: 'matched', type: 'direct', expiresAt: new Date(Date.now() + 48 * 3600 * 1000) }
-    });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const myCount = await activeMatchCount(userId, tx);
+      const theirCount = await activeMatchCount(fromUser.id, tx);
+      if (myCount >= ACTIVE_CONVERSATION_LIMIT || theirCount >= ACTIVE_CONVERSATION_LIMIT) {
+        throw new Error('CAP_REACHED');
+      }
 
-    const key = pairKey(userId, fromUser.id);
-    const convo = await tx.conversation.findUnique({ where: { pairKey: key } });
-    if (!convo) {
-      await tx.conversation.create({ data: { pairKey: key, participantAId: userId, participantBId: fromUser.id, state: 'active' } });
+      await tx.like.update({ where: { id: like.id }, data: { status: 'matched' } });
+      await tx.like.upsert({
+        where: { fromUserId_toUserId: { fromUserId: userId, toUserId: fromUser.id } },
+        update: { status: 'matched', type: 'direct', expiresAt: new Date(Date.now() + 48 * 3600 * 1000) },
+        create: { fromUserId: userId, toUserId: fromUser.id, status: 'matched', type: 'direct', expiresAt: new Date(Date.now() + 48 * 3600 * 1000) }
+      });
+
+      const key = pairKey(userId, fromUser.id);
+      const convo = await tx.conversation.findUnique({ where: { pairKey: key } });
+      if (!convo) {
+        await tx.conversation.create({ data: { pairKey: key, participantAId: userId, participantBId: fromUser.id, state: 'active' } });
+      }
+      await tx.user.update({ where: { id: userId }, data: { lastActiveAt: new Date() } });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'CAP_REACHED') {
+      return new Response('Conversation cap reached. Resolve existing chats first.', { status: 400 });
     }
-  });
+    throw error;
+  }
 
   redirect('/conversations');
 }

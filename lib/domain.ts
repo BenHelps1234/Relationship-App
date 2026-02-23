@@ -10,10 +10,10 @@ export function nextLikeStatus(expiresAt: Date, now: Date, current: LikeStatus):
   return now >= expiresAt ? LikeStatus.expired : LikeStatus.pending;
 }
 
-export function canSendMessage(state: ConversationState, messageCountTotal: number): boolean {
-  return state === ConversationState.active && messageCountTotal < MESSAGE_CAP;
+export function canSendMessage(state: ConversationState, senderMessageCount: number): boolean {
+  return state === ConversationState.active && senderMessageCount < MESSAGE_CAP;
 }
 
-export function conversationStateAfterMessage(countAfterSend: number): ConversationState {
-  return countAfterSend >= MESSAGE_CAP ? ConversationState.gated_to_video : ConversationState.active;
+export function conversationStateAfterMessage(senderCountAfterSend: number): ConversationState {
+  return senderCountAfterSend >= MESSAGE_CAP ? ConversationState.gated_to_video : ConversationState.active;
 }

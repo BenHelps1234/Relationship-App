@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
-import { LikeType, Prisma } from '@prisma/client';
+import { LikeType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
 import { getSessionUserId } from '@/lib/session-user';
 import { incrementDailyLikesReceived } from '@/lib/daily-stats';
 import { pairKey } from '@/lib/pairs';
 import { ensureDailyQuotaFresh } from '@/lib/quota';
+import { activeMatchCount } from '@/lib/match';
 
 const LIKE_EXPIRY_MS = 48 * 3600 * 1000;
 
@@ -20,15 +21,6 @@ function likeTypeRank(type: LikeType): number {
   if (type === LikeType.strong) return 3;
   if (type === LikeType.direct) return 2;
   return 1;
-}
-
-async function activeConversationCount(tx: Prisma.TransactionClient, userId: string): Promise<number> {
-  return tx.conversation.count({
-    where: {
-      state: { in: ['active', 'gated_to_video'] },
-      OR: [{ participantAId: userId }, { participantBId: userId }]
-    }
-  });
 }
 
 export async function POST(req: Request) {
@@ -57,14 +49,26 @@ export async function POST(req: Request) {
     console.info(`[like] daily quota block user=${user.id}`);
     return new Response('Daily like limit reached.', { status: 400 });
   }
+  if (await activeMatchCount(user.id) >= ACTIVE_CONVERSATION_LIMIT) {
+    return new Response('You already have 5 active matches. Resolve one before liking.', { status: 400 });
+  }
 
   const now = new Date();
   const expiresAt = new Date(now.getTime() + LIKE_EXPIRY_MS);
 
   const result = await prisma.$transaction(async (tx) => {
+    const requesterActiveCountPre = await activeMatchCount(user.id, tx);
+    if (requesterActiveCountPre >= ACTIVE_CONVERSATION_LIMIT) {
+      return { kind: 'requester-at-cap' as const };
+    }
+
     const target = await tx.user.findUnique({ where: { id: toUserId } });
     if (!target || target.accountStatus !== 'active' || target.isFrozen) {
       return { kind: 'invalid-target' as const };
+    }
+    const targetActiveCountPre = await activeMatchCount(toUserId, tx);
+    if (targetActiveCountPre >= ACTIVE_CONVERSATION_LIMIT) {
+      return { kind: 'target-at-cap' as const };
     }
 
     const existing = await tx.like.findUnique({
@@ -108,8 +112,8 @@ export async function POST(req: Request) {
     });
 
     if (reciprocal && reciprocal.status === 'pending' && reciprocal.expiresAt > now) {
-      const requesterActiveCount = await activeConversationCount(tx, user.id);
-      const targetActiveCount = await activeConversationCount(tx, toUserId);
+      const requesterActiveCount = await activeMatchCount(user.id, tx);
+      const targetActiveCount = await activeMatchCount(toUserId, tx);
       if (requesterActiveCount < ACTIVE_CONVERSATION_LIMIT && targetActiveCount < ACTIVE_CONVERSATION_LIMIT) {
         await tx.like.updateMany({
           where: {
@@ -139,6 +143,8 @@ export async function POST(req: Request) {
   });
 
   if (result.kind === 'invalid-target') return new Response('Target unavailable.', { status: 400 });
+  if (result.kind === 'requester-at-cap') return new Response('You already have 5 active matches. Resolve one before liking.', { status: 400 });
+  if (result.kind === 'target-at-cap') return new Response('Target already has 5 active matches.', { status: 400 });
   if (result.kind === 'already-liked') return new Response('You already liked this profile.', { status: 400 });
 
   redirect('/discovery');

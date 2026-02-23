@@ -8,6 +8,8 @@ import { getSessionUser } from '@/lib/session-user';
 import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
 import { todayKey } from '@/lib/daily-stats';
 import { effectiveAgeRange } from '@/lib/filters';
+import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
+import { activeMatchCount } from '@/lib/match';
 
 type Candidate = Awaited<ReturnType<typeof prisma.user.findMany>>[number];
 
@@ -39,6 +41,15 @@ export default async function DiscoveryPage() {
   if ((cityStatus?.totalUsersActive ?? 0) < threshold) {
     return <main><Nav /><p className="card">Discovery locked for low-city liquidity. <Link href="/waitlist" className="underline">Go to waitlist.</Link></p></main>;
   }
+  const viewerActiveMatches = await activeMatchCount(user.id);
+  if (viewerActiveMatches >= ACTIVE_CONVERSATION_LIMIT) {
+    return (
+      <main>
+        <Nav />
+        <p className="card">You are at 5 active matches. Resolve one conversation to return to discovery.</p>
+      </main>
+    );
+  }
 
   const quota = user.dailyQuota;
   const shownUserIds = quota ? JSON.parse(quota.shownUserIdsJson) as string[] : [];
@@ -48,6 +59,20 @@ export default async function DiscoveryPage() {
   const ageRange = effectiveAgeRange(user.age, user.preferredAgeMin, user.preferredAgeMax);
 
   const exclusionIds = new Set<string>([user.id, ...shownUserIds, ...hiddenUserIds]);
+  const activeConversations = await prisma.conversation.findMany({
+    where: { state: { in: ['active', 'gated_to_video'] }, endedAt: null },
+    select: { participantAId: true, participantBId: true }
+  });
+  const activeCounts = new Map<string, number>();
+  for (const c of activeConversations) {
+    activeCounts.set(c.participantAId, (activeCounts.get(c.participantAId) ?? 0) + 1);
+    activeCounts.set(c.participantBId, (activeCounts.get(c.participantBId) ?? 0) + 1);
+  }
+  const atCapIds = new Set(
+    Array.from(activeCounts.entries())
+      .filter(([, count]) => count >= ACTIVE_CONVERSATION_LIMIT)
+      .map(([id]) => id)
+  );
 
   const strongLikeSenders = await prisma.like.findMany({
     where: {
@@ -64,10 +89,11 @@ export default async function DiscoveryPage() {
       .sort((a, b) => b.fromUser.mpsCurrent - a.fromUser.mpsCurrent)
       .map((l) => l.fromUserId)
   ).filter((id) => !exclusionIds.has(id));
+  const strongSenderIdsEligible = strongSenderIds.filter((id) => !atCapIds.has(id));
 
-  const strongCandidates = strongSenderIds.length === 0 ? [] : await prisma.user.findMany({
+  const strongCandidates = strongSenderIdsEligible.length === 0 ? [] : await prisma.user.findMany({
     where: {
-      id: { in: strongSenderIds },
+      id: { in: strongSenderIdsEligible },
       cityId: user.cityId,
       accountStatus: 'active',
       isFrozen: false,
@@ -94,17 +120,19 @@ export default async function DiscoveryPage() {
       .sort((a, b) => b.fromUser.mpsCurrent - a.fromUser.mpsCurrent)
       .map((l) => l.fromUserId)
   ).filter((id) => !exclusionIds.has(id));
+  const invisibleSenderIdsEligible = invisibleSenderIds.filter((id) => !atCapIds.has(id));
 
-  const invisibleCandidates = invisibleSenderIds.length === 0 ? [] : await prisma.user.findMany({
+  const invisibleInjectionLimit = Math.min(remainingAfterStrong, 5);
+  const invisibleCandidates = invisibleSenderIdsEligible.length === 0 ? [] : await prisma.user.findMany({
     where: {
-      id: { in: invisibleSenderIds },
+      id: { in: invisibleSenderIdsEligible },
       cityId: user.cityId,
       accountStatus: 'active',
       isFrozen: false,
       age: { gte: ageRange.min, lte: ageRange.max }
     },
     include: { profile: true, profileDailyStats: { where: { statDate: todayKey() }, take: 1 } },
-    take: remainingAfterStrong
+    take: invisibleInjectionLimit
   });
   for (const c of invisibleCandidates) exclusionIds.add(c.id);
 
@@ -116,7 +144,8 @@ export default async function DiscoveryPage() {
       cityId: user.cityId,
       accountStatus: 'active',
       isFrozen: false,
-      age: { gte: ageRange.min, lte: ageRange.max }
+      age: { gte: ageRange.min, lte: ageRange.max },
+      NOT: { id: { in: Array.from(atCapIds) } }
     },
     include: { profile: true, profileDailyStats: { where: { statDate: todayKey() }, take: 1 } },
     take: 200
