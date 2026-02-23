@@ -23,6 +23,7 @@ Local-only Next.js + Prisma MVP implementing the specified state machines, hard 
 ## Implemented Rules
 - Discovery: max 25 profiles/day displayed in 5x5 grid UI and max 5 likes/day.
 - Discovery shown tracking: stores `DailyQuota.shownUserIdsJson`, increments `profilesShownToday`, and avoids repeated profile cards in the same day.
+- Discovery card action supports `Never see again` and permanently hides that profile for the viewer.
 - Conversations: max 5 active chats per user and 15 total-message cap with gated "Schedule 20-min Video Date" CTA (stub).
 - Active conversation cap is enforced for both users before conversation creation.
 - Unmatch endpoint: `POST /api/unmatch` sets `conversation.state=ended`, immediately freeing an active slot.
@@ -34,6 +35,7 @@ Local-only Next.js + Prisma MVP implementing the specified state machines, hard 
 - MPS weighted scoring, tiers, roadmap next-best actions, and history log.
 - Peer review loop requires anonymous photo-only 1-10 ratings, stores raw + normalized + weighted scores.
 - Peer-review normalization assumption: rater mean-centering (`raw - rater_mean`) clamped to [-3, +3].
+- For MVP pairing: male rates female, female rates male, non-binary can rate either male/female pool.
 - Odds bubble uses real per-profile daily likes (`ProfileDailyStat.likesReceived`) + MPS tier gap.
 - Ban state: `accountStatus` with login blocked for `banned`.
 
@@ -55,6 +57,7 @@ API wrappers call these directly (no shelling out):
 ## Assumptions
 - Server pages and APIs use authenticated session user (`getServerSession`) as the acting user.
 - Opposite-sex peer review uses male/female pairing only for this MVP gate.
+- Daily counters and day keys use local server calendar date.
 
 ## Testing
 - `npm test` validates key state machine logic (like expiry + 15-message gate).

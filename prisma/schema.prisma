@@ -64,6 +64,8 @@ model User {
   mpsHistory                MpsHistory[]
   dailyQuota                DailyQuota?
   profileDailyStats         ProfileDailyStat[] @relation("ProfileStats")
+  hiddenUsers               HiddenProfile[]    @relation("HiddenUsers")
+  hiddenByUsers             HiddenProfile[]    @relation("HiddenByUsers")
 }
 
 model Profile {
@@ -171,4 +173,14 @@ model ProfileDailyStat {
   likesReceived Int    @default(0)
 
   @@unique([profileUserId, statDate])
+}
+
+model HiddenProfile {
+  id           String @id @default(cuid())
+  userId       String
+  hiddenUserId String
+  user         User   @relation("HiddenUsers", fields: [userId], references: [id])
+  hiddenUser   User   @relation("HiddenByUsers", fields: [hiddenUserId], references: [id])
+
+  @@unique([userId, hiddenUserId])
 }

@@ -23,11 +23,16 @@ export default async function DiscoveryPage() {
 
   const quota = user.dailyQuota;
   const shownUserIds = quota ? JSON.parse(quota.shownUserIdsJson) as string[] : [];
+  const hidden = await prisma.hiddenProfile.findMany({
+    where: { userId: user.id },
+    select: { hiddenUserId: true }
+  });
+  const hiddenUserIds = hidden.map((h) => h.hiddenUserId);
   const remainingSlots = Math.max(0, DAILY_PROFILE_LIMIT - (quota?.profilesShownToday ?? 0));
 
   const candidates = await prisma.user.findMany({
     where: {
-      id: { notIn: [user.id, ...shownUserIds] },
+      id: { notIn: [user.id, ...shownUserIds, ...hiddenUserIds] },
       isFrozen: false,
       accountStatus: 'active'
     },
@@ -47,12 +52,15 @@ export default async function DiscoveryPage() {
       }
     });
   }
+  const shownCount = (quota?.profilesShownToday ?? 0) + candidates.length;
+  const limitReached = remainingSlots <= 0;
 
   return (
     <main className="space-y-3">
       <Nav />
       <h1 className="text-xl">Discovery 5x5</h1>
-      <p className="card">Shown today: {quota?.profilesShownToday ?? 0}/25 | Likes left: {quota?.likesRemaining ?? 0}/5</p>
+      <p className="card">Shown today: {shownCount}/25 | Likes left: {quota?.likesRemaining ?? 0}/5</p>
+      {limitReached ? <p className="card">Daily profile limit reached. Come back after local midnight.</p> : null}
       <div className="grid grid-cols-5 gap-1">
         {candidates.slice(0, 25).map((p) => {
           const likesToday = p.profileDailyStats[0]?.likesReceived ?? 0;
@@ -66,6 +74,10 @@ export default async function DiscoveryPage() {
               <form action="/api/like" method="post">
                 <input type="hidden" name="toUserId" value={p.id} />
                 <button className="underline">Like</button>
+              </form>
+              <form action="/api/hide-profile" method="post">
+                <input type="hidden" name="hiddenUserId" value={p.id} />
+                <button className="underline">Never see again</button>
               </form>
             </div>
           );

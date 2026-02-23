@@ -6,8 +6,14 @@ export default async function RoadmapPage() {
   const user = await getSessionUser();
   if (!user) return <p>No user.</p>;
   const history = await prisma.mpsHistory.findMany({ where: { userId: user.id }, orderBy: { timestamp: 'asc' } });
+  const targetGenders =
+    user.gender === 'male'
+      ? ['female']
+      : user.gender === 'female'
+        ? ['male']
+        : ['male', 'female'];
   const opposites = await prisma.user.findMany({
-    where: { gender: user.gender === 'male' ? 'female' : 'male', id: { not: user.id } },
+    where: { gender: { in: targetGenders }, id: { not: user.id } },
     include: { profile: true },
     take: 2
   });

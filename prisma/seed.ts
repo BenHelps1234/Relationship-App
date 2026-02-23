@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { weightedMps } from '@/lib/mps';
 import { refreshCityStatus } from '@/lib/city';
+import { todayKey } from '@/lib/daily-stats';
 
 async function main() {
   await prisma.profileDailyStat.deleteMany();
@@ -61,7 +62,7 @@ async function main() {
     await prisma.profileDailyStat.create({
       data: {
         profileUserId: user.id,
-        statDate: new Date().toISOString().slice(0, 10),
+        statDate: todayKey(),
         likesReceived: i % 12
       }
     });

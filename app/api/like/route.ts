@@ -29,41 +29,64 @@ export async function POST(req: Request) {
     return new Response('Daily like limit reached.', { status: 400 });
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.like.create({
-      data: {
-        fromUserId: user.id,
-        toUserId,
-        expiresAt: new Date(Date.now() + 48 * 3600 * 1000),
-        status: 'pending'
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existingPending = await tx.like.findFirst({
+        where: { fromUserId: user.id, toUserId, status: 'pending' }
+      });
+      if (existingPending) {
+        throw new Error('duplicate_pending_like');
       }
-    });
 
-    await incrementDailyLikesReceived(toUserId, tx as any);
+      await tx.like.create({
+        data: {
+          fromUserId: user.id,
+          toUserId,
+          expiresAt: new Date(Date.now() + 48 * 3600 * 1000),
+          status: 'pending'
+        }
+      });
 
-    await tx.dailyQuota.update({ where: { userId: user.id }, data: { likesRemaining: { decrement: 1 } } });
+      await incrementDailyLikesReceived(toUserId, tx);
 
-    const reciprocal = await tx.like.findFirst({ where: { fromUserId: toUserId, toUserId: user.id, status: 'pending' } });
-    if (reciprocal) {
-      const requesterActiveCount = await activeConversationCount(tx, user.id);
-      const targetActiveCount = await activeConversationCount(tx, toUserId);
+      await tx.dailyQuota.update({ where: { userId: user.id }, data: { likesRemaining: { decrement: 1 } } });
 
-      if (requesterActiveCount < ACTIVE_CONVERSATION_LIMIT && targetActiveCount < ACTIVE_CONVERSATION_LIMIT) {
-        await tx.like.updateMany({
+      const reciprocal = await tx.like.findFirst({ where: { fromUserId: toUserId, toUserId: user.id, status: 'pending' } });
+      if (reciprocal) {
+        const requesterActiveCount = await activeConversationCount(tx, user.id);
+        const targetActiveCount = await activeConversationCount(tx, toUserId);
+        const existingConversation = await tx.conversation.findFirst({
           where: {
+            state: { in: ['active', 'gated_to_video'] },
             OR: [
-              { fromUserId: user.id, toUserId },
-              { fromUserId: toUserId, toUserId: user.id }
+              { participantAId: user.id, participantBId: toUserId },
+              { participantAId: toUserId, participantBId: user.id }
             ]
-          },
-          data: { status: 'matched' }
+          }
         });
-        await tx.conversation.create({ data: { participantAId: user.id, participantBId: toUserId, state: 'active' } });
-      }
-    }
 
-    await tx.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
-  });
+        if (!existingConversation && requesterActiveCount < ACTIVE_CONVERSATION_LIMIT && targetActiveCount < ACTIVE_CONVERSATION_LIMIT) {
+          await tx.like.updateMany({
+            where: {
+              OR: [
+                { fromUserId: user.id, toUserId },
+                { fromUserId: toUserId, toUserId: user.id }
+              ]
+            },
+            data: { status: 'matched' }
+          });
+          await tx.conversation.create({ data: { participantAId: user.id, participantBId: toUserId, state: 'active' } });
+        }
+      }
+
+      await tx.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'duplicate_pending_like') {
+      return new Response('You already liked this profile. Await response or expiry.', { status: 400 });
+    }
+    throw error;
+  }
 
   redirect('/discovery');
 }

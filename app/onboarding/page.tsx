@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { signIn } from 'next-auth/react';
 
 export default function OnboardingPage() {
   const [form, setForm] = useState({ email: '', password: '', gender: 'male', zip: '', bio: '', photoMainUrl: '', incomeSelfReported: 0, heightCm: 170, weightKg: 70 });
@@ -10,6 +11,9 @@ export default function OnboardingPage() {
     const res = await fetch('/api/onboarding', { method: 'POST', body: JSON.stringify(form) });
     const data = await res.json();
     setResult(JSON.stringify(data));
+    if (res.ok) {
+      await signIn('credentials', { email: form.email, password: form.password, callbackUrl: '/discovery' });
+    }
   }
 
   return (

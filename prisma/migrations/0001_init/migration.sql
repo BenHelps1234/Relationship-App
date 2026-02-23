@@ -113,4 +113,12 @@ CREATE TABLE "ProfileDailyStat" (
   "likesReceived" INTEGER NOT NULL DEFAULT 0,
   FOREIGN KEY ("profileUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
+CREATE TABLE "HiddenProfile" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "userId" TEXT NOT NULL,
+  "hiddenUserId" TEXT NOT NULL,
+  FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  FOREIGN KEY ("hiddenUserId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
 CREATE UNIQUE INDEX "ProfileDailyStat_profileUserId_statDate_key" ON "ProfileDailyStat"("profileUserId", "statDate");
+CREATE UNIQUE INDEX "HiddenProfile_userId_hiddenUserId_key" ON "HiddenProfile"("userId", "hiddenUserId");
