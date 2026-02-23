@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  male
+  female
+  non_binary
+}
+
+enum AccountStatus {
+  active
+  banned
+}
+
+enum LikeStatus {
+  pending
+  matched
+  expired
+}
+
+enum ConversationState {
+  active
+  gated_to_video
+  ended
+  frozen
+}
+
+model User {
+  id                      String           @id @default(cuid())
+  email                   String           @unique
+  passwordHash            String
+  gender                  Gender
+  zip                     String
+  cityId                  String
+  city                    City             @relation(fields: [cityId], references: [id])
+  isFrozen                Boolean          @default(false)
+  partnerId               String?
+  partner                 User?            @relation("PartnerLink", fields: [partnerId], references: [id])
+  partneredBy             User[]           @relation("PartnerLink")
+  accountStatus           AccountStatus    @default(active)
+  riskFingerprintHash     String?
+  mpsCurrent              Float            @default(1.0)
+  scorePhysicality        Float            @default(1.0)
+  scoreResources          Float            @default(1.0)
+  scoreReliability        Float            @default(1.0)
+  scoreSafety             Float            @default(1.0)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  profile                 Profile?
+  sentLikes               Like[]           @relation("SentLikes")
+  receivedLikes           Like[]           @relation("ReceivedLikes")
+  participantAConversations Conversation[] @relation("ParticipantA")
+  participantBConversations Conversation[] @relation("ParticipantB")
+  sentMessages            Message[]
+  writtenPeerReviews      PeerReview[]     @relation("WrittenReviews")
+  receivedPeerReviews     PeerReview[]     @relation("ReceivedReviews")
+  mpsHistory              MpsHistory[]
+  dailyQuota              DailyQuota?
+}
+
+model Profile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id])
+  bio                String?
+  prompts            String?
+  photoMainUrl       String
+  photoCapturedAt    DateTime
+  incomeSelfReported Int      @default(0)
+  heightCm           Int?
+  weightKg           Int?
+  profileCompletion  Int      @default(0)
+  verificationStatus String   @default("unverified")
+}
+
+model Like {
+  id         String     @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  fromUser   User       @relation("SentLikes", fields: [fromUserId], references: [id])
+  toUser     User       @relation("ReceivedLikes", fields: [toUserId], references: [id])
+  createdAt  DateTime   @default(now())
+  expiresAt  DateTime
+  status     LikeStatus @default(pending)
+}
+
+model Conversation {
+  id                 String            @id @default(cuid())
+  participantAId     String
+  participantBId     String
+  participantA       User              @relation("ParticipantA", fields: [participantAId], references: [id])
+  participantB       User              @relation("ParticipantB", fields: [participantBId], references: [id])
+  messageCountTotal  Int               @default(0)
+  state              ConversationState @default(active)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  messages           Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User         @relation(fields: [senderId], references: [id])
+  body           String
+  createdAt      DateTime     @default(now())
+}
+
+model PeerReview {
+  id               String   @id @default(cuid())
+  raterUserId      String
+  ratedUserId      String
+  raterUser        User     @relation("WrittenReviews", fields: [raterUserId], references: [id])
+  ratedUser        User     @relation("ReceivedReviews", fields: [ratedUserId], references: [id])
+  rawRating        Int
+  normalizedRating Float
+  weightApplied    Float
+  createdAt        DateTime @default(now())
+}
+
+model City {
+  id         String      @id @default(cuid())
+  name       String
+  zipPrefix  String      @unique
+  threshold  Int         @default(1000)
+  users      User[]
+  cityStatus CityStatus?
+}
+
+model CityStatus {
+  cityId           String   @id
+  city             City     @relation(fields: [cityId], references: [id])
+  totalUsersActive Int      @default(0)
+  threshold        Int      @default(1000)
+  updatedAt        DateTime @updatedAt
+}
+
+model MpsHistory {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  timestamp         DateTime @default(now())
+  mpsValue          Float
+  componentSnapshot String
+}
+
+model DailyQuota {
+  userId               String   @id
+  user                 User     @relation(fields: [userId], references: [id])
+  likesRemaining       Int      @default(5)
+  profilesShownToday   Int      @default(0)
+  peerReviewsCompleted Int      @default(0)
+  resetAt              DateTime
+}
