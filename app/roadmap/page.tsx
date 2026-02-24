@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { mpsTier, roadmapActions } from '@/lib/mps';
 import { getSessionUser } from '@/lib/session-user';
 import { ensurePeerReviewGateState } from '@/lib/peer-review';
+import { displayMpsOrCalibrating } from '@/services/market';
 
 export default async function RoadmapPage() {
   const user = await getSessionUser();
@@ -26,12 +27,34 @@ export default async function RoadmapPage() {
     include: { profile: true },
     take: 2
   });
+  const metricCandidates = [
+    { label: 'Physicality', value: user.scorePhysicality },
+    { label: 'Resources', value: user.scoreResources },
+    { label: 'Safety', value: user.scoreSafety }
+  ].sort((a, b) => a.value - b.value);
+  const specificMetric = metricCandidates[0]?.label ?? 'Profile Quality';
+  const dynamicTask =
+    user.reliability > 0.5
+      ? `Improve ${specificMetric}.`
+      : 'Increase Activity.';
 
   return (
     <main className="space-y-3">
       <h1 className="text-xl">MPS Roadmap</h1>
-      <p className="card">MPS: {user.mpsCurrent.toFixed(2)} ({mpsTier(user.mpsCurrent)})</p>
-      <div className="card space-y-1">
+      {user.isPremium ? (
+        <>
+          <p className="card">MPS: {displayMpsOrCalibrating(user.mps, user.impressions_count)} ({mpsTier(user.mps)})</p>
+          <p className="card">Reliability: {(user.reliability * 100).toFixed(1)}%</p>
+          <p className="card">Priority task: {dynamicTask}</p>
+        </>
+      ) : (
+        <>
+          <p className="card blur-sm select-none">MPS: 0.00 (Calibrating)</p>
+          <p className="card blur-sm select-none">Reliability: --%</p>
+          <p className="card">Reveal My Market Rank</p>
+        </>
+      )}
+      <div className={`card space-y-1 ${user.isPremium ? '' : 'blur-sm select-none'}`}>
         {roadmapActions({ physicality: user.scorePhysicality, resources: user.scoreResources, reliability: user.scoreReliability, safety: user.scoreSafety }).map((r) => (
           <p key={r.component} className="text-sm">{r.component}: {r.current.toFixed(2)} | Next: {r.nextAction} | Impact: +{r.projectedDelta}</p>
         ))}

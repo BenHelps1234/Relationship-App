@@ -3,12 +3,17 @@ import { getSessionUser } from '@/lib/session-user';
 import { Nav } from '@/components/Nav';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
 import { activeMatchCount } from '@/lib/match';
+import Link from 'next/link';
 
 export default async function StrongLikesPage() {
   const user = await getSessionUser();
   if (!user) return <p>User not found.</p>;
   const activeMatches = await activeMatchCount(user.id);
   const atCap = activeMatches >= ACTIVE_CONVERSATION_LIMIT;
+  await prisma.like.updateMany({
+    where: { toUserId: user.id, type: 'strong', status: 'pending', viewedAt: { not: null } },
+    data: { status: 'expired' }
+  });
 
   const likes = await prisma.like.findMany({
     where: {
@@ -18,9 +23,9 @@ export default async function StrongLikesPage() {
       expiresAt: { gt: new Date() },
       fromUser: { accountStatus: 'active', isFrozen: false }
     },
-    include: { fromUser: { include: { profile: true } } },
-    orderBy: { createdAt: 'desc' }
+    include: { fromUser: { include: { profile: true } } }
   });
+  likes.sort((a, b) => b.fromUser.mps - a.fromUser.mps);
 
   return (
     <main className="space-y-3">
@@ -35,6 +40,8 @@ export default async function StrongLikesPage() {
           <div key={l.id} className="card space-y-2">
             <img src={l.fromUser.profile?.photoMainUrl} alt="strong liker" className="h-28 w-full rounded object-cover" />
             <p className="text-sm">Strong intent received. Expires in ~{remainingHours}h</p>
+            {user.isPremium ? <p className="text-xs">Sender MPS: {l.fromUser.mps.toFixed(2)}</p> : null}
+            <Link href={`/likes-you/${l.id}`} className="underline text-xs">Open detail view</Link>
             <div className="grid grid-cols-2 gap-2">
               <form action="/api/strong-like-respond" method="post">
                 <input type="hidden" name="likeId" value={l.id} />

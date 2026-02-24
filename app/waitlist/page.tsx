@@ -87,7 +87,7 @@ export default async function WaitlistPage({ searchParams }: WaitlistPageProps) 
       <div className="card">
         <h2 className="font-medium">Improvement Roadmap</h2>
         {roadmapActions({ physicality: user.scorePhysicality, resources: user.scoreResources, reliability: user.scoreReliability, safety: user.scoreSafety }).map((x) => (
-          <p key={x.component} className="text-sm">{x.component}: {x.current.toFixed(1)} -> {x.nextAction} ({x.projectedDelta > 0 ? '+' : ''}{x.projectedDelta})</p>
+          <p key={x.component} className="text-sm">{x.component}: {x.current.toFixed(1)} {'->'} {x.nextAction} ({x.projectedDelta > 0 ? '+' : ''}{x.projectedDelta})</p>
         ))}
       </div>
     </main>

@@ -25,7 +25,7 @@ export default async function ConversationsPage() {
         <Link key={c.id} href={`/conversations/${c.id}`} className="card block">
           <p>ID: {c.id.slice(0, 8)}</p>
           <p>Messages (total): {c.messageCountTotal}</p>
-          <p>You can send up to 15 each.</p>
+          <p>Chat gates at 15 total messages.</p>
           <p>State: {c.state}</p>
           <p>Expires in ~{Math.max(0, Math.ceil((72 * 3600 * 1000 - (Date.now() - (c.lastMessageAt ?? c.createdAt).getTime())) / (3600 * 1000)))}h inactivity</p>
         </Link>

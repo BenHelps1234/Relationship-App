@@ -26,6 +26,16 @@ export function weightedMps(components: MpsComponents): number {
   return clamp01to10(result);
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function scaleBasePotentialToMps(base0to10: number): number {
+  const clamped = clamp01to10(base0to10);
+  const scaled = 2 + (clamped / 10) * 6;
+  return Math.max(2, Math.min(8, Number(scaled.toFixed(2))));
+}
+
 export function mpsTier(mps: number): 'Developing' | 'Competitive' | 'Elite' {
   if (mps <= 3) return 'Developing';
   if (mps <= 7) return 'Competitive';
@@ -65,4 +75,24 @@ export function roadmapActions(components: MpsComponents): Array<{ component: st
       projectedDelta: 0.2
     }
   ];
+}
+
+export function likeToImpressionRatio(likesCount: number, impressionsCount: number): number {
+  if (impressionsCount <= 0) return 0;
+  return likesCount / impressionsCount;
+}
+
+export function reliabilityFromImpressions(impressionsCount: number): number {
+  return clamp(impressionsCount / 50, 0, 1);
+}
+
+export function percentileMps(lir: number, cityLirs: number[]): number {
+  if (cityLirs.length === 0) return 5;
+  const sorted = [...cityLirs].sort((a, b) => a - b);
+  let lessOrEqual = 0;
+  for (const v of sorted) {
+    if (v <= lir) lessOrEqual += 1;
+  }
+  const percentile = lessOrEqual / sorted.length;
+  return Number((2 + percentile * 6).toFixed(2));
 }

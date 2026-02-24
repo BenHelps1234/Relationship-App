@@ -46,11 +46,14 @@ Local-only Next.js + Prisma MVP implementing the specified state machines, hard 
 - Filters page supports preferred age min/max. Discovery applies viewer-side age range only (no symmetry enforcement in MVP).
 - Odds bubble uses real per-profile daily likes (`ProfileDailyStat.likesReceived`) + MPS tier gap.
 - Ban state: `accountStatus` with login blocked for `banned`.
+- Admin role support: `accountStatus=ADMIN` for protected `/admin` dashboard access.
+- Reliability scoring pipeline now tracks `impressionsCount`, `likesReceivedCount`, `basePotentialScore`, and `reliabilityScore` (0.05-1.0 baseline/confidence) and updates MPS in the 2.0-8.0 range.
 
 ## Cron-like local jobs
 - `npm run cron:daily` -> resets likes remaining, shown profiles, shown ID list, and peer-review gate counters.
 - `npm run cron:expire-likes` -> expires pending likes where `expiresAt <= now`.
-- `npm run cron:reliability` -> recalculates reliability and MPS from completion/activity.
+- `npm run cron:reliability` -> recalculates MPS with blended base-potential + log market resonance and applies ghost penalty checks.
+- `npm run admin:ensure-ben` -> upserts `Ben` / `Ben69` as ADMIN for local testing.
 
 API wrappers call these directly (no shelling out):
 - `POST /api/cron/daily-reset`

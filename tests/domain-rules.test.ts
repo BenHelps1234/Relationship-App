@@ -8,10 +8,10 @@ test('likes expire strictly from expiresAt when pending', () => {
   assert.equal(nextLikeStatus(expiresAt, after, 'pending'), 'expired');
 });
 
-test('conversation gates at 15 messages per sender', () => {
+test('conversation gates at 15 total messages', () => {
   assert.equal(canSendMessage('active', MESSAGE_CAP - 1), true);
   assert.equal(conversationStateAfterMessage(MESSAGE_CAP), 'gated_to_video');
-  assert.equal(canSendMessage('gated_to_video', MESSAGE_CAP), false);
+  assert.equal(canSendMessage('active', MESSAGE_CAP), false);
 });
 
 test('conversation expires after 72 hours of inactivity', () => {

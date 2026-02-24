@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   }
 
   if (decision === 'pass') {
-    await prisma.like.update({ where: { id: like.id }, data: { status: 'expired' } });
+    await prisma.like.update({ where: { id: like.id }, data: { status: 'passed' } });
     redirect('/strong-likes');
   }
 

@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import { LikeType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
 import { getSessionUserId } from '@/lib/session-user';
@@ -9,18 +8,27 @@ import { ensureDailyQuotaFresh } from '@/lib/quota';
 import { activeMatchCount } from '@/lib/match';
 
 const LIKE_EXPIRY_MS = 48 * 3600 * 1000;
+type LikeTypeValue = 'direct' | 'invisible' | 'strong';
 
-function parseLikeType(raw: FormDataEntryValue | null): LikeType {
+function parseLikeType(raw: FormDataEntryValue | null): LikeTypeValue {
   const value = String(raw || 'direct');
-  if (value === 'invisible') return LikeType.invisible;
-  if (value === 'strong') return LikeType.strong;
-  return LikeType.direct;
+  if (value === 'invisible') return 'invisible';
+  if (value === 'strong') return 'strong';
+  return 'direct';
 }
 
-function likeTypeRank(type: LikeType): number {
-  if (type === LikeType.strong) return 3;
-  if (type === LikeType.direct) return 2;
+function likeTypeRank(type: LikeTypeValue): number {
+  if (type === 'strong') return 3;
+  if (type === 'direct') return 2;
   return 1;
+}
+
+function likeWeight(type: LikeTypeValue): number {
+  return type === 'strong' ? 1.5 : 1.0;
+}
+
+function likeCountWeight(type: LikeTypeValue): number {
+  return type === 'strong' ? 2 : 1;
 }
 
 export async function POST(req: Request) {
@@ -88,8 +96,18 @@ export async function POST(req: Request) {
       }
 
       if (existing.status === 'pending' && now < existing.expiresAt) {
-        if (likeTypeRank(requestedType) > likeTypeRank(existing.type)) {
+        if (likeTypeRank(requestedType) > likeTypeRank(existing.type as LikeTypeValue)) {
+          const delta = likeWeight(requestedType) - likeWeight(existing.type as LikeTypeValue);
           await tx.like.update({ where: { id: existing.id }, data: { type: requestedType, expiresAt } });
+          if (delta > 0) {
+            await tx.user.update({
+              where: { id: toUserId },
+              data: {
+                likesReceivedCount: { increment: delta },
+                likes_received_count: { increment: likeCountWeight(requestedType) - likeCountWeight(existing.type as LikeTypeValue) }
+              }
+            });
+          }
           return { kind: 'upgraded' as const };
         }
         return { kind: 'already-liked' as const };
@@ -105,6 +123,14 @@ export async function POST(req: Request) {
     if (consumedLike) {
       await tx.dailyQuota.update({ where: { userId: user.id }, data: { likesRemaining: { decrement: 1 } } });
       await incrementDailyLikesReceived(toUserId, tx);
+      await tx.user.update({
+        where: { id: toUserId },
+        data: {
+          likesReceivedCount: { increment: likeWeight(requestedType) },
+          likesCount: { increment: 1 },
+          likes_received_count: { increment: likeCountWeight(requestedType) }
+        }
+      });
     }
 
     const reciprocal = await tx.like.findUnique({

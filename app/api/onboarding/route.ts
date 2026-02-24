@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { bmiScore, weightedMps } from '@/lib/mps';
+import { bmiScore, scaleBasePotentialToMps, weightedMps } from '@/lib/mps';
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   const resources = Math.min(10, (Number(body.incomeSelfReported || 0) / 20000) * 2);
   const reliability = 1;
   const safety = 1;
-  const mps = weightedMps({ physicality, resources, reliability, safety });
+  const basePotential = scaleBasePotentialToMps(weightedMps({ physicality, resources, reliability, safety }));
 
   try {
     const user = await prisma.user.create({
@@ -32,7 +32,17 @@ export async function POST(req: Request) {
         contactPhone: body.contactPhone ? String(body.contactPhone) : null,
         zip: body.zip,
         cityId: city.id,
-        mpsCurrent: mps,
+        mps: basePotential,
+        mpsCurrent: basePotential,
+        basePotential: basePotential,
+        basePotentialScore: basePotential,
+        reliability: 0,
+        reliabilityScore: 0.05,
+        impressionsCount: 0,
+        impressions_count: 0,
+        likesCount: 0,
+        likes_received_count: 0,
+        likesReceivedCount: 0,
         scorePhysicality: physicality,
         scoreResources: resources,
         scoreReliability: reliability,
@@ -52,7 +62,7 @@ export async function POST(req: Request) {
         },
         mpsHistory: {
           create: {
-            mpsValue: mps,
+            mpsValue: basePotential,
             componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety })
           }
         },

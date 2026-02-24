@@ -3,7 +3,7 @@ export const DAILY_LIKE_LIMIT = 5;
 export const ACTIVE_CONVERSATION_LIMIT = 5;
 export const MESSAGE_CAP = 15;
 export const CONVERSATION_INACTIVITY_MS = 72 * 3600 * 1000;
-export type LikeStatusValue = 'pending' | 'matched' | 'expired';
+export type LikeStatusValue = 'pending' | 'matched' | 'expired' | 'passed';
 export type ConversationStateValue = 'active' | 'gated_to_video' | 'ended' | 'frozen';
 
 export function nextLikeStatus(expiresAt: Date, now: Date, current: LikeStatusValue): LikeStatusValue {
@@ -11,12 +11,12 @@ export function nextLikeStatus(expiresAt: Date, now: Date, current: LikeStatusVa
   return now >= expiresAt ? 'expired' : 'pending';
 }
 
-export function canSendMessage(state: ConversationStateValue, senderMessageCount: number): boolean {
-  return state === 'active' && senderMessageCount < MESSAGE_CAP;
+export function canSendMessage(state: ConversationStateValue, totalMessageCount: number): boolean {
+  return state === 'active' && totalMessageCount < MESSAGE_CAP;
 }
 
-export function conversationStateAfterMessage(senderCountAfterSend: number): ConversationStateValue {
-  return senderCountAfterSend >= MESSAGE_CAP ? 'gated_to_video' : 'active';
+export function conversationStateAfterMessage(totalCountAfterSend: number): ConversationStateValue {
+  return totalCountAfterSend >= MESSAGE_CAP ? 'gated_to_video' : 'active';
 }
 
 export function isConversationInactive(referenceTime: Date, now = new Date()): boolean {

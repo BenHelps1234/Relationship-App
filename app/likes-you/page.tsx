@@ -3,6 +3,7 @@ import { getSessionUser } from '@/lib/session-user';
 import { Nav } from '@/components/Nav';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
 import { activeMatchCount } from '@/lib/match';
+import Link from 'next/link';
 
 export default async function LikesYouPage() {
   const user = await getSessionUser();
@@ -35,6 +36,7 @@ export default async function LikesYouPage() {
           <div key={l.id} className="card space-y-2">
             <img src={l.fromUser.profile?.photoMainUrl} alt="liker" className="h-28 w-full rounded object-cover" />
             <p className="text-sm">Someone liked you. Expires in ~{remainingHours}h</p>
+            <Link href={`/likes-you/${l.id}`} className="underline text-xs">Open detail view</Link>
             <form action="/api/like" method="post">
               <input type="hidden" name="toUserId" value={l.fromUserId} />
               <input type="hidden" name="type" value="direct" />

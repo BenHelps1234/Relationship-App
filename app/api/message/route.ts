@@ -26,14 +26,14 @@ export async function POST(req: Request) {
   const isParticipant = convo.participantAId === user.id || convo.participantBId === user.id;
   if (!isParticipant) return new Response('Forbidden', { status: 403 });
   const senderCount = convo.participantAId === user.id ? convo.messageCountByA : convo.messageCountByB;
-  if (!canSendMessage(convo.state, senderCount)) {
-    console.info(`[message] gate block conversation=${conversationId} senderCount=${senderCount}`);
+  if (!canSendMessage(convo.state, convo.messageCountTotal)) {
+    console.info(`[message] gate block conversation=${conversationId} totalCount=${convo.messageCountTotal}`);
     return new Response('Message cap reached', { status: 400 });
   }
 
   const senderCountAfter = senderCount + 1;
   const totalAfter = convo.messageCountTotal + 1;
-  const nextState = conversationStateAfterMessage(senderCountAfter);
+  const nextState = conversationStateAfterMessage(totalAfter);
   if (nextState === 'gated_to_video' && convo.state !== 'gated_to_video') {
     console.info(`[message] conversation gated conversation=${conversationId} sender=${user.id}`);
   }

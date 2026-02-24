@@ -10,6 +10,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
+    "admin:ensure-ben": "tsx scripts/ensure-ben-admin.ts",
     "cron:daily": "tsx scripts/daily-reset.ts",
     "cron:expire-likes": "tsx scripts/expire-likes.ts",
     "cron:expire-conversations": "tsx scripts/expire-conversations.ts",

@@ -1,15 +1,14 @@
 import { prisma } from '@/lib/prisma';
 import { DAILY_PROFILE_LIMIT } from '@/lib/domain';
-import { oddsYouMatch } from '@/lib/odds';
 import { mpsTier } from '@/lib/mps';
 import { Nav } from '@/components/Nav';
 import Link from 'next/link';
 import { getSessionUser } from '@/lib/session-user';
 import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
-import { todayKey } from '@/lib/daily-stats';
 import { effectiveAgeRange } from '@/lib/filters';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
 import { activeMatchCount } from '@/lib/match';
+import { displayMpsOrCalibrating, matchProbability } from '@/services/market';
 
 type Candidate = Awaited<ReturnType<typeof prisma.user.findMany>>[number];
 
@@ -86,7 +85,7 @@ export default async function DiscoveryPage() {
   const strongSenderIds = uniqueIdsInOrder(
     strongLikeSenders
       .filter((l) => l.fromUser.cityId === user.cityId)
-      .sort((a, b) => b.fromUser.mpsCurrent - a.fromUser.mpsCurrent)
+      .sort((a, b) => b.fromUser.mps - a.fromUser.mps)
       .map((l) => l.fromUserId)
   ).filter((id) => !exclusionIds.has(id));
   const strongSenderIdsEligible = strongSenderIds.filter((id) => !atCapIds.has(id));
@@ -99,7 +98,7 @@ export default async function DiscoveryPage() {
       isFrozen: false,
       age: { gte: ageRange.min, lte: ageRange.max }
     },
-    include: { profile: true, profileDailyStats: { where: { statDate: todayKey() }, take: 1 } },
+    include: { profile: true },
     take: remainingSlots
   });
   for (const c of strongCandidates) exclusionIds.add(c.id);
@@ -117,7 +116,7 @@ export default async function DiscoveryPage() {
   const invisibleSenderIds = uniqueIdsInOrder(
     invisibleLikeSenders
       .filter((l) => l.fromUser.cityId === user.cityId)
-      .sort((a, b) => b.fromUser.mpsCurrent - a.fromUser.mpsCurrent)
+      .sort((a, b) => b.fromUser.mps - a.fromUser.mps)
       .map((l) => l.fromUserId)
   ).filter((id) => !exclusionIds.has(id));
   const invisibleSenderIdsEligible = invisibleSenderIds.filter((id) => !atCapIds.has(id));
@@ -131,7 +130,7 @@ export default async function DiscoveryPage() {
       isFrozen: false,
       age: { gte: ageRange.min, lte: ageRange.max }
     },
-    include: { profile: true, profileDailyStats: { where: { statDate: todayKey() }, take: 1 } },
+    include: { profile: true },
     take: invisibleInjectionLimit
   });
   for (const c of invisibleCandidates) exclusionIds.add(c.id);
@@ -147,25 +146,22 @@ export default async function DiscoveryPage() {
       age: { gte: ageRange.min, lte: ageRange.max },
       NOT: { id: { in: Array.from(atCapIds) } }
     },
-    include: { profile: true, profileDailyStats: { where: { statDate: todayKey() }, take: 1 } },
+    include: { profile: true },
     take: 200
   });
 
-  const viewerTier = mpsTier(user.mpsCurrent);
+  const viewerTier = mpsTier(user.mps);
   const viewerTierIndex = TIER_INDEX[viewerTier];
-  const affinityScore = (candidate: Candidate): number => {
-    const likesToday = candidate.profileDailyStats[0]?.likesReceived ?? 0;
-    return oddsYouMatch(user.mpsCurrent, candidate.mpsCurrent, likesToday).probability;
-  };
+  const affinityScore = (candidate: Candidate): number => 1 - Math.abs(candidate.mps - user.mps) / 8;
 
   const sameTier = fillPool
-    .filter((c) => TIER_INDEX[mpsTier(c.mpsCurrent)] === viewerTierIndex)
+    .filter((c) => TIER_INDEX[mpsTier(c.mps)] === viewerTierIndex)
     .sort((a, b) => affinityScore(b) - affinityScore(a));
   const higherTier = fillPool
-    .filter((c) => TIER_INDEX[mpsTier(c.mpsCurrent)] > viewerTierIndex)
+    .filter((c) => TIER_INDEX[mpsTier(c.mps)] > viewerTierIndex)
     .sort((a, b) => affinityScore(b) - affinityScore(a));
   const lowerTier = fillPool
-    .filter((c) => TIER_INDEX[mpsTier(c.mpsCurrent)] < viewerTierIndex)
+    .filter((c) => TIER_INDEX[mpsTier(c.mps)] < viewerTierIndex)
     .sort((a, b) => affinityScore(b) - affinityScore(a));
 
   const desiredSame = Math.floor(remainingAfterInjection * 0.6);
@@ -190,15 +186,34 @@ export default async function DiscoveryPage() {
     byId.add(c.id);
     return true;
   }).slice(0, remainingSlots);
+  const pendingCounts = candidates.length > 0
+    ? await prisma.like.groupBy({
+        by: ['toUserId'],
+        where: { toUserId: { in: candidates.map((c) => c.id) }, status: 'pending', expiresAt: { gt: new Date() } },
+        _count: { _all: true }
+      })
+    : [];
+  const pendingCountByUserId = new Map<string, number>(pendingCounts.map((g) => [g.toUserId, g._count._all]));
+  const matchProbabilityByUserId = new Map<string, number>(
+    await Promise.all(
+      candidates.map(async (candidate) => [candidate.id, await matchProbability(user.id, candidate.id)] as const)
+    )
+  );
 
   if (quota && candidates.length > 0) {
-    await prisma.dailyQuota.update({
-      where: { userId: user.id },
-      data: {
-        profilesShownToday: { increment: candidates.length },
-        shownUserIdsJson: JSON.stringify([...shownUserIds, ...candidates.map((c) => c.id)])
-      }
-    });
+    await prisma.$transaction([
+      prisma.dailyQuota.update({
+        where: { userId: user.id },
+        data: {
+          profilesShownToday: { increment: candidates.length },
+          shownUserIdsJson: JSON.stringify([...shownUserIds, ...candidates.map((c) => c.id)])
+        }
+      }),
+      prisma.user.updateMany({
+        where: { id: { in: candidates.map((c) => c.id) } },
+        data: { impressionsCount: { increment: 1 }, impressions_count: { increment: 1 } }
+      })
+    ]);
   }
 
   const shownCount = (quota?.profilesShownToday ?? 0) + candidates.length;
@@ -212,13 +227,18 @@ export default async function DiscoveryPage() {
       {limitReached ? <p className="card">Daily profile limit reached. Come back after local midnight.</p> : null}
       <div className="grid grid-cols-5 gap-1">
         {candidates.slice(0, 25).map((p) => {
-          const likesToday = p.profileDailyStats[0]?.likesReceived ?? 0;
-          const odds = oddsYouMatch(user.mpsCurrent, p.mpsCurrent, likesToday);
+          const queueCount = pendingCountByUserId.get(p.id) ?? 0;
+          const warning = p.mps - user.mps > 2.5 || queueCount > 50
+            ? 'Based on current demand and your Market Placement, you may be positioned lower in this queue. To move up, complete Roadmap Tasks to optimize resonance or maintain high Reliability.'
+            : null;
+          const matchProbability = matchProbabilityByUserId.get(p.id) ?? 0;
           return (
             <div key={p.id} className="card p-2 text-[10px]">
               <img src={p.profile?.photoMainUrl} alt="profile" className="h-12 w-full rounded object-cover" />
-              <p>Odds: {Math.round(odds.probability * 100)}%</p>
-              {odds.warning ? <p className="text-amber-300">Far-tier like warning (neutral)</p> : null}
+              <p>MPS: {displayMpsOrCalibrating(p.mps, p.impressions_count)}</p>
+              <p>Reliability: {Math.round(p.reliability * 100)}%</p>
+              {user.isPremium ? <p>Match Chance: {matchProbability}%</p> : null}
+              {warning ? <p className="text-amber-300">{warning}</p> : null}
               {p.profile?.verificationStatus === 'passed' ? <p className="text-sky-300">Blue Tint badge</p> : null}
               <form action="/api/like" method="post">
                 <input type="hidden" name="toUserId" value={p.id} />

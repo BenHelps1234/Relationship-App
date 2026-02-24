@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { weightedMps } from '@/lib/mps';
+import { scaleBasePotentialToMps, weightedMps } from '@/lib/mps';
 import { refreshCityStatus } from '@/lib/city';
 import { todayKey } from '@/lib/daily-stats';
 import { pairKey } from '@/lib/pairs';
@@ -23,6 +23,7 @@ async function main() {
   const sf = await prisma.city.create({ data: { name: 'San Francisco', zipPrefix: '941' } });
 
   const pass = await bcrypt.hash('password123', 10);
+  const benPass = await bcrypt.hash('Ben69', 10);
   for (let i = 1; i <= 30; i++) {
     const cityId = i < 20 ? nyc.id : sf.id;
     const gender = i % 2 === 0 ? 'female' : 'male';
@@ -31,7 +32,7 @@ async function main() {
     const reliability = 3 + (i % 4);
     const safety = i % 3 === 0 ? 8 : 4;
     const age = 20 + (i % 18);
-    const mps = weightedMps({ physicality, resources, reliability, safety });
+    const basePotential = scaleBasePotentialToMps(weightedMps({ physicality, resources, reliability, safety }));
     const user = await prisma.user.create({
       data: {
         email: `user${i}@demo.local`,
@@ -41,10 +42,20 @@ async function main() {
         zip: cityId === nyc.id ? '10001' : '94105',
         cityId,
         lastActiveAt: i <= 24 ? new Date() : new Date(Date.now() - 40 * 24 * 3600 * 1000),
-        mpsCurrent: mps,
+        mps: basePotential,
+        mpsCurrent: basePotential,
+        basePotential: basePotential,
+        basePotentialScore: basePotential,
         scorePhysicality: physicality,
         scoreResources: resources,
         scoreReliability: reliability,
+        reliability: 0,
+        reliabilityScore: 0.05,
+        impressionsCount: 0,
+        impressions_count: 0,
+        likesCount: 0,
+        likes_received_count: 0,
+        likesReceivedCount: 0,
         scoreSafety: safety,
         dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 0, resetAt: new Date() } },
         profile: {
@@ -56,10 +67,11 @@ async function main() {
             heightCm: 165 + (i % 20),
             weightKg: 55 + (i % 30),
             profileCompletion: 75,
-            verificationStatus: i % 5 === 0 ? 'passed' : 'unverified'
+            verificationStatus: i % 5 === 0 ? 'passed' : 'unverified',
+            preloadedContact: null
           }
         },
-        mpsHistory: { create: { mpsValue: mps, componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety }) } },
+        mpsHistory: { create: { mpsValue: basePotential, componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety }) } },
         waitlistState: { create: { cityId } }
       }
     });
@@ -72,6 +84,56 @@ async function main() {
       }
     });
   }
+
+  await prisma.user.create({
+    data: {
+      email: 'Ben',
+      passwordHash: benPass,
+      gender: 'male',
+      age: 30,
+      zip: '10001',
+      cityId: nyc.id,
+      accountStatus: 'ADMIN' as any,
+      isAdmin: true,
+      lastActiveAt: new Date(),
+      mps: 5,
+      mpsCurrent: 5,
+      basePotential: 5,
+      basePotentialScore: 5,
+      scorePhysicality: 5,
+      scoreResources: 5,
+      scoreReliability: 5,
+      reliability: 1,
+      reliabilityScore: 1,
+      impressionsCount: 0,
+      impressions_count: 0,
+      likesCount: 0,
+      likes_received_count: 0,
+      likesReceivedCount: 0,
+      scoreSafety: 5,
+      dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 0, resetAt: new Date() } },
+      profile: {
+        create: {
+          bio: 'Admin account',
+          photoMainUrl: 'https://picsum.photos/seed/admin-ben/400/400',
+          photoCapturedAt: new Date(),
+          incomeSelfReported: 0,
+          heightCm: 180,
+          weightKg: 80,
+          profileCompletion: 100,
+          verificationStatus: 'passed',
+          preloadedContact: 'admin@local'
+        }
+      },
+      mpsHistory: {
+        create: {
+          mpsValue: 5,
+          componentSnapshot: JSON.stringify({ physicality: 5, resources: 5, reliability: 5, safety: 5 })
+        }
+      },
+      waitlistState: { create: { cityId: nyc.id } }
+    }
+  });
 
   const users = await prisma.user.findMany({ orderBy: { email: 'asc' } });
   const [u1, u2, u3, u4, u5, u6, u7, u8, u9, u10] = users;
