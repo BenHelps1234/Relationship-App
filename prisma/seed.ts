@@ -1,6 +1,5 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { scaleBasePotentialToMps, weightedMps } from '@/lib/mps';
 import { refreshCityStatus } from '@/lib/city';
 import { todayKey } from '@/lib/daily-stats';
 import { pairKey } from '@/lib/pairs';
@@ -27,12 +26,8 @@ async function main() {
   for (let i = 1; i <= 30; i++) {
     const cityId = i < 20 ? nyc.id : sf.id;
     const gender = i % 2 === 0 ? 'female' : 'male';
-    const physicality = 4 + (i % 6);
-    const resources = 3 + (i % 5);
-    const reliability = 3 + (i % 4);
-    const safety = i % 3 === 0 ? 8 : 4;
     const age = 20 + (i % 18);
-    const basePotential = scaleBasePotentialToMps(weightedMps({ physicality, resources, reliability, safety }));
+    const basePotential = 5.0;
     const user = await prisma.user.create({
       data: {
         email: `user${i}@demo.local`,
@@ -46,17 +41,17 @@ async function main() {
         mpsCurrent: basePotential,
         basePotential: basePotential,
         basePotentialScore: basePotential,
-        scorePhysicality: physicality,
-        scoreResources: resources,
-        scoreReliability: reliability,
+        scorePhysicality: 5,
+        scoreResources: 5,
+        scoreReliability: 5,
         reliability: 0,
-        reliabilityScore: 0.05,
+        reliabilityScore: 0,
         impressionsCount: 0,
         impressions_count: 0,
         likesCount: 0,
         likes_received_count: 0,
         likesReceivedCount: 0,
-        scoreSafety: safety,
+        scoreSafety: 5,
         dailyQuota: { create: { likesRemaining: 5, profilesShownToday: 0, shownUserIdsJson: '[]', peerReviewsCompleted: 0, resetAt: new Date() } },
         profile: {
           create: {
@@ -71,7 +66,7 @@ async function main() {
             preloadedContact: null
           }
         },
-        mpsHistory: { create: { mpsValue: basePotential, componentSnapshot: JSON.stringify({ physicality, resources, reliability, safety }) } },
+        mpsHistory: { create: { mpsValue: basePotential, componentSnapshot: JSON.stringify({ mode: 'pure_market', initialMps: 5.0, initialReliability: 0.0 }) } },
         waitlistState: { create: { cityId } }
       }
     });
@@ -85,16 +80,14 @@ async function main() {
     });
   }
 
-  await prisma.user.create({
-    data: {
-      email: 'Ben',
+  await prisma.user.upsert({
+    where: { email: 'Ben' },
+    update: {
       passwordHash: benPass,
-      gender: 'male',
-      age: 30,
-      zip: '10001',
-      cityId: nyc.id,
       accountStatus: 'ADMIN' as any,
       isAdmin: true,
+      isPremium: true,
+      subscriptionActive: true,
       lastActiveAt: new Date(),
       mps: 5,
       mpsCurrent: 5,
@@ -103,8 +96,36 @@ async function main() {
       scorePhysicality: 5,
       scoreResources: 5,
       scoreReliability: 5,
-      reliability: 1,
-      reliabilityScore: 1,
+      reliability: 0,
+      reliabilityScore: 0,
+      impressionsCount: 0,
+      impressions_count: 0,
+      likesCount: 0,
+      likes_received_count: 0,
+      likesReceivedCount: 0,
+      scoreSafety: 5
+    },
+    create: {
+      email: 'Ben',
+      passwordHash: benPass,
+      gender: 'male',
+      age: 30,
+      zip: '10001',
+      cityId: nyc.id,
+      accountStatus: 'ADMIN' as any,
+      isAdmin: true,
+      isPremium: true,
+      subscriptionActive: true,
+      lastActiveAt: new Date(),
+      mps: 5,
+      mpsCurrent: 5,
+      basePotential: 5,
+      basePotentialScore: 5,
+      scorePhysicality: 5,
+      scoreResources: 5,
+      scoreReliability: 5,
+      reliability: 0,
+      reliabilityScore: 0,
       impressionsCount: 0,
       impressions_count: 0,
       likesCount: 0,
@@ -128,7 +149,7 @@ async function main() {
       mpsHistory: {
         create: {
           mpsValue: 5,
-          componentSnapshot: JSON.stringify({ physicality: 5, resources: 5, reliability: 5, safety: 5 })
+          componentSnapshot: JSON.stringify({ mode: 'pure_market', initialMps: 5.0, initialReliability: 0.0 })
         }
       },
       waitlistState: { create: { cityId: nyc.id } }

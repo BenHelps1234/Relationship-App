@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { displayMpsOrCalibrating } from '@/services/market';
 
 export default async function AdminPage() {
   const session = await getServerSession(authOptions);
@@ -15,22 +16,12 @@ export default async function AdminPage() {
     select: {
       id: true,
       email: true,
-      accountStatus: true,
       isPremium: true,
       mps: true,
       reliability: true,
-      impressions_count: true,
-      likes_received_count: true,
-      likesCount: true,
       impressionsCount: true
     }
   });
-  const queueAgg = await prisma.like.groupBy({
-    by: ['toUserId'],
-    where: { status: 'pending', expiresAt: { gt: new Date() } },
-    _count: { _all: true }
-  });
-  const queueByUser = new Map<string, number>(queueAgg.map((g) => [g.toUserId, g._count._all]));
   const activeConversations = await prisma.conversation.findMany({
     where: { state: { in: ['active', 'gated_to_video'] }, endedAt: null },
     select: { participantAId: true, participantBId: true }
@@ -49,29 +40,35 @@ export default async function AdminPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-zinc-700">
-              <th className="p-2 text-left">User</th>
+              <th className="p-2 text-left">Username</th>
               <th className="p-2 text-left">MPS</th>
               <th className="p-2 text-left">Reliability</th>
-              <th className="p-2 text-left">L/I Ratio</th>
-              <th className="p-2 text-left">Active Matches</th>
-              <th className="p-2 text-left">Pending Queue Size</th>
+              <th className="p-2 text-left">Total Impressions</th>
+              <th className="p-2 text-left">Match Count</th>
               <th className="p-2 text-left">Premium</th>
+              <th className="p-2 text-left">Manual Signals</th>
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
+            {users.map((u: (typeof users)[number]) => (
               <tr key={u.id} className="border-b border-zinc-800">
                 <td className="p-2">{u.email}</td>
-                <td className="p-2">{u.mps.toFixed(2)}</td>
+                <td className="p-2">{displayMpsOrCalibrating(u.mps, u.impressionsCount)}</td>
                 <td className="p-2">{(u.reliability * 100).toFixed(1)}%</td>
-                <td className="p-2">{u.impressions_count > 0 ? (u.likes_received_count / u.impressions_count).toFixed(3) : '0.000'}</td>
+                <td className="p-2">{u.impressionsCount}</td>
                 <td className="p-2">{activeMatchesByUser.get(u.id) ?? 0}</td>
-                <td className="p-2">{queueByUser.get(u.id) ?? 0}</td>
                 <td className="p-2">
+                  <p className="mb-1">{u.isPremium ? 'Premium: Yes' : 'Premium: No'}</p>
                   <form action="/api/admin/grant-premium" method="post">
                     <input type="hidden" name="userId" value={u.id} />
                     <input type="hidden" name="isPremium" value={u.isPremium ? '0' : '1'} />
-                    <button className="card w-full">{u.isPremium ? 'Revoke' : 'Grant'}</button>
+                    <button className="card w-full">{u.isPremium ? 'Revoke Premium' : 'Grant Premium'}</button>
+                  </form>
+                </td>
+                <td className="p-2">
+                  <form action="/api/admin/boost-signals" method="post">
+                    <input type="hidden" name="userId" value={u.id} />
+                    <button className="card w-full">Add 10 Impressions / 5 Likes</button>
                   </form>
                 </td>
               </tr>

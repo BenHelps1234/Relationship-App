@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { DAILY_PROFILE_LIMIT } from '@/lib/domain';
+import { DAILY_LIKE_LIMIT, DAILY_PROFILE_LIMIT } from '@/lib/domain';
 import { mpsTier } from '@/lib/mps';
 import { Nav } from '@/components/Nav';
 import Link from 'next/link';
@@ -8,7 +8,8 @@ import { effectiveCityThreshold, refreshCityStatus } from '@/lib/city';
 import { effectiveAgeRange } from '@/lib/filters';
 import { ACTIVE_CONVERSATION_LIMIT } from '@/lib/domain';
 import { activeMatchCount } from '@/lib/match';
-import { displayMpsOrCalibrating, matchProbability } from '@/services/market';
+import { getMatchProbability, marketRealityWarning } from '@/services/probability';
+import { DiscoveryFeed } from '@/components/DiscoveryFeed';
 
 type Candidate = Awaited<ReturnType<typeof prisma.user.findMany>>[number];
 
@@ -30,18 +31,48 @@ function uniqueIdsInOrder(ids: string[]): string[] {
   return out;
 }
 
+function firstNameFromEmail(email: string): string {
+  const base = email.split('@')[0] ?? '';
+  const token = base.split(/[._-]/)[0] ?? base;
+  if (!token) return 'Member';
+  return token.charAt(0).toUpperCase() + token.slice(1);
+}
+
+function parsePrompts(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((v) => (typeof v === 'string' ? v.trim() : ''))
+        .filter((v) => v.length > 0);
+    }
+  } catch {
+    // Fallback to line-based prompts.
+  }
+  return trimmed
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
 export default async function DiscoveryPage() {
   const user = await getSessionUser();
   if (!user) return <p>User not found.</p>;
+  const isAdmin = user.isAdmin;
+  const viewerCity = await prisma.city.findUnique({ where: { id: user.cityId }, select: { name: true } });
+  const cityName = viewerCity?.name ?? 'Your city';
 
   await refreshCityStatus(user.cityId);
   const cityStatus = await prisma.cityStatus.findUnique({ where: { cityId: user.cityId } });
   const threshold = effectiveCityThreshold(cityStatus?.threshold ?? 1000);
-  if ((cityStatus?.totalUsersActive ?? 0) < threshold) {
+  if (!isAdmin && (cityStatus?.totalUsersActive ?? 0) < threshold) {
     return <main><Nav /><p className="card">Discovery locked for low-city liquidity. <Link href="/waitlist" className="underline">Go to waitlist.</Link></p></main>;
   }
   const viewerActiveMatches = await activeMatchCount(user.id);
-  if (viewerActiveMatches >= ACTIVE_CONVERSATION_LIMIT) {
+  if (!isAdmin && viewerActiveMatches >= ACTIVE_CONVERSATION_LIMIT) {
     return (
       <main>
         <Nav />
@@ -51,11 +82,11 @@ export default async function DiscoveryPage() {
   }
 
   const quota = user.dailyQuota;
-  const shownUserIds = quota ? JSON.parse(quota.shownUserIdsJson) as string[] : [];
+  const shownUserIds = isAdmin ? [] : (quota ? JSON.parse(quota.shownUserIdsJson) as string[] : []);
   const hidden = await prisma.hiddenProfile.findMany({ where: { userId: user.id }, select: { hiddenUserId: true } });
-  const hiddenUserIds = hidden.map((h) => h.hiddenUserId);
-  const remainingSlots = Math.max(0, DAILY_PROFILE_LIMIT - (quota?.profilesShownToday ?? 0));
-  const ageRange = effectiveAgeRange(user.age, user.preferredAgeMin, user.preferredAgeMax);
+  const hiddenUserIds = isAdmin ? [] : hidden.map((h) => h.hiddenUserId);
+  const remainingSlots = isAdmin ? DAILY_PROFILE_LIMIT : Math.max(0, DAILY_PROFILE_LIMIT - (quota?.profilesShownToday ?? 0));
+  const ageRange = isAdmin ? { min: 18, max: 99 } : effectiveAgeRange(user.age, user.preferredAgeMin, user.preferredAgeMax);
 
   const exclusionIds = new Set<string>([user.id, ...shownUserIds, ...hiddenUserIds]);
   const activeConversations = await prisma.conversation.findMany({
@@ -88,7 +119,7 @@ export default async function DiscoveryPage() {
       .sort((a, b) => b.fromUser.mps - a.fromUser.mps)
       .map((l) => l.fromUserId)
   ).filter((id) => !exclusionIds.has(id));
-  const strongSenderIdsEligible = strongSenderIds.filter((id) => !atCapIds.has(id));
+  const strongSenderIdsEligible = isAdmin ? strongSenderIds : strongSenderIds.filter((id) => !atCapIds.has(id));
 
   const strongCandidates = strongSenderIdsEligible.length === 0 ? [] : await prisma.user.findMany({
     where: {
@@ -119,7 +150,7 @@ export default async function DiscoveryPage() {
       .sort((a, b) => b.fromUser.mps - a.fromUser.mps)
       .map((l) => l.fromUserId)
   ).filter((id) => !exclusionIds.has(id));
-  const invisibleSenderIdsEligible = invisibleSenderIds.filter((id) => !atCapIds.has(id));
+  const invisibleSenderIdsEligible = isAdmin ? invisibleSenderIds : invisibleSenderIds.filter((id) => !atCapIds.has(id));
 
   const invisibleInjectionLimit = Math.min(remainingAfterStrong, 5);
   const invisibleCandidates = invisibleSenderIdsEligible.length === 0 ? [] : await prisma.user.findMany({
@@ -137,15 +168,24 @@ export default async function DiscoveryPage() {
 
   const remainingAfterInjection = Math.max(0, remainingAfterStrong - invisibleCandidates.length);
 
+  const fillPoolWhere = isAdmin
+    ? {
+        id: { notIn: Array.from(exclusionIds) },
+        cityId: user.cityId,
+        accountStatus: 'active' as const,
+        isFrozen: false,
+        age: { gte: ageRange.min, lte: ageRange.max }
+      }
+    : {
+        id: { notIn: Array.from(exclusionIds) },
+        cityId: user.cityId,
+        accountStatus: 'active' as const,
+        isFrozen: false,
+        age: { gte: ageRange.min, lte: ageRange.max },
+        NOT: { id: { in: Array.from(atCapIds) } }
+      };
   const fillPool = remainingAfterInjection <= 0 ? [] : await prisma.user.findMany({
-    where: {
-      id: { notIn: Array.from(exclusionIds) },
-      cityId: user.cityId,
-      accountStatus: 'active',
-      isFrozen: false,
-      age: { gte: ageRange.min, lte: ageRange.max },
-      NOT: { id: { in: Array.from(atCapIds) } }
-    },
+    where: fillPoolWhere,
     include: { profile: true },
     take: 200
   });
@@ -153,6 +193,11 @@ export default async function DiscoveryPage() {
   const viewerTier = mpsTier(user.mps);
   const viewerTierIndex = TIER_INDEX[viewerTier];
   const affinityScore = (candidate: Candidate): number => 1 - Math.abs(candidate.mps - user.mps) / 8;
+  const freshWindowStart = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
+  const totalImpressions = (candidate: Candidate): number => {
+    if (typeof candidate.impressions_count === 'number') return candidate.impressions_count;
+    return candidate.impressionsCount;
+  };
 
   const sameTier = fillPool
     .filter((c) => TIER_INDEX[mpsTier(c.mps)] === viewerTierIndex)
@@ -163,22 +208,71 @@ export default async function DiscoveryPage() {
   const lowerTier = fillPool
     .filter((c) => TIER_INDEX[mpsTier(c.mps)] < viewerTierIndex)
     .sort((a, b) => affinityScore(b) - affinityScore(a));
+  const freshUsers = fillPool
+    .filter((c) => c.createdAt >= freshWindowStart || totalImpressions(c) < 50)
+    .sort((a, b) => affinityScore(b) - affinityScore(a));
+  const wildcardPool = [...fillPool].sort(() => Math.random() - 0.5);
 
-  const desiredSame = Math.floor(remainingAfterInjection * 0.6);
+  /*
+   * Step 3 Discovery Fill Buckets
+   * - Same tier: 50%
+   * - Higher tier: 20%
+   * - Fresh users: 15% (created within 7 days OR < 50 total impressions)
+   * - Wildcards: 10% (random sample from fill pool, any tier)
+   * - Lower tier: 5%
+   *
+   * If a bucket underfills, remaining slots are redistributed proportionally
+   * across same-tier and higher-tier candidates (same first, then higher).
+   */
+  const desiredSame = Math.floor(remainingAfterInjection * 0.5);
   const desiredHigher = Math.floor(remainingAfterInjection * 0.2);
-  const desiredLower = remainingAfterInjection - desiredSame - desiredHigher;
+  const desiredFresh = Math.floor(remainingAfterInjection * 0.15);
+  const desiredWildcard = Math.floor(remainingAfterInjection * 0.1);
+  const desiredLower = Math.floor(remainingAfterInjection * 0.05);
 
-  const pick = (arr: Candidate[], count: number) => arr.slice(0, Math.max(0, count));
+  const selectedIds = new Set<string>();
+  const pickUnique = (arr: Candidate[], count: number): Candidate[] => {
+    if (count <= 0) return [];
+    const picked: Candidate[] = [];
+    for (const candidate of arr) {
+      if (selectedIds.has(candidate.id)) continue;
+      selectedIds.add(candidate.id);
+      picked.push(candidate);
+      if (picked.length >= count) break;
+    }
+    return picked;
+  };
+
   const tierFillInitial = [
-    ...pick(sameTier, desiredSame),
-    ...pick(higherTier, desiredHigher),
-    ...pick(lowerTier, desiredLower)
+    ...pickUnique(sameTier, desiredSame),
+    ...pickUnique(higherTier, desiredHigher),
+    ...pickUnique(freshUsers, desiredFresh),
+    ...pickUnique(wildcardPool, desiredWildcard),
+    ...pickUnique(lowerTier, desiredLower)
   ];
 
-  const needMore = remainingAfterInjection - tierFillInitial.length;
-  const tierFill = needMore > 0
-    ? [...tierFillInitial, ...fillPool.filter((c) => !tierFillInitial.some((t) => t.id === c.id)).slice(0, needMore)]
-    : tierFillInitial;
+  const redistributionPattern: Array<'same' | 'higher'> = [
+    'same', 'same', 'same', 'same', 'same', 'higher', 'higher'
+  ];
+  let redistributionIndex = 0;
+  let remainingToRedistribute = remainingAfterInjection - tierFillInitial.length;
+  const redistributed: Candidate[] = [];
+  while (remainingToRedistribute > 0) {
+    const preferredBucket = redistributionPattern[redistributionIndex % redistributionPattern.length];
+    redistributionIndex += 1;
+    const preferredPool = preferredBucket === 'same' ? sameTier : higherTier;
+    const fallbackPool = preferredBucket === 'same' ? higherTier : sameTier;
+    const nextCandidate = preferredPool.find((c) => !selectedIds.has(c.id))
+      ?? fallbackPool.find((c) => !selectedIds.has(c.id));
+    if (!nextCandidate) break;
+    selectedIds.add(nextCandidate.id);
+    redistributed.push(nextCandidate);
+    remainingToRedistribute -= 1;
+  }
+
+  const remainingFallback = remainingAfterInjection - (tierFillInitial.length + redistributed.length);
+  const fallbackFill = remainingFallback > 0 ? pickUnique(fillPool, remainingFallback) : [];
+  const tierFill = [...tierFillInitial, ...redistributed, ...fallbackFill];
 
   const byId = new Set<string>();
   const candidates = [...strongCandidates, ...invisibleCandidates, ...tierFill].filter((c) => {
@@ -186,21 +280,21 @@ export default async function DiscoveryPage() {
     byId.add(c.id);
     return true;
   }).slice(0, remainingSlots);
-  const pendingCounts = candidates.length > 0
+  const pendingStrongCounts = candidates.length > 0
     ? await prisma.like.groupBy({
         by: ['toUserId'],
-        where: { toUserId: { in: candidates.map((c) => c.id) }, status: 'pending', expiresAt: { gt: new Date() } },
+        where: { toUserId: { in: candidates.map((c) => c.id) }, type: 'strong', status: 'pending', expiresAt: { gt: new Date() } },
         _count: { _all: true }
       })
     : [];
-  const pendingCountByUserId = new Map<string, number>(pendingCounts.map((g) => [g.toUserId, g._count._all]));
-  const matchProbabilityByUserId = new Map<string, number>(
+  const pendingStrongCountByUserId = new Map<string, number>(pendingStrongCounts.map((g) => [g.toUserId, g._count._all]));
+  const strongProbabilityByUserId = new Map<string, number>(
     await Promise.all(
-      candidates.map(async (candidate) => [candidate.id, await matchProbability(user.id, candidate.id)] as const)
+      candidates.map(async (candidate) => [candidate.id, await getMatchProbability(user.id, candidate.id, 'strong')] as const)
     )
   );
 
-  if (quota && candidates.length > 0) {
+  if (!isAdmin && quota && candidates.length > 0) {
     await prisma.$transaction([
       prisma.dailyQuota.update({
         where: { userId: user.id },
@@ -216,57 +310,44 @@ export default async function DiscoveryPage() {
     ]);
   }
 
-  const shownCount = (quota?.profilesShownToday ?? 0) + candidates.length;
-  const limitReached = shownCount >= DAILY_PROFILE_LIMIT;
+  const shownCount = isAdmin ? candidates.length : (quota?.profilesShownToday ?? 0) + candidates.length;
+  const limitReached = !isAdmin && shownCount >= DAILY_PROFILE_LIMIT;
+  const likesRemaining = isAdmin ? DAILY_LIKE_LIMIT : (quota?.likesRemaining ?? 0);
+  const profiles = candidates.slice(0, DAILY_PROFILE_LIMIT).map((p) => {
+    const pendingStrongLikes = pendingStrongCountByUserId.get(p.id) ?? 0;
+    const warning = marketRealityWarning(user.mps, p.mps, pendingStrongLikes);
+    const strongProbability = strongProbabilityByUserId.get(p.id) ?? 0;
+    const prompts = parsePrompts(p.profile?.prompts);
+    const bio = p.profile?.bio?.trim() ?? '';
+    const snippetSource = prompts[0] ?? bio;
+    return {
+      id: p.id,
+      firstName: firstNameFromEmail(p.email),
+      age: p.age,
+      city: cityName,
+      tierLabel: mpsTier(p.mps),
+      photoUrls: [p.profile?.photoMainUrl ?? 'https://picsum.photos/seed/discovery/600/800'],
+      bio,
+      prompts,
+      snippet: snippetSource || 'No prompt or bio yet.',
+      warning,
+      strongProbability
+    };
+  });
 
   return (
-    <main className="space-y-3">
+    <main className="mx-auto w-full max-w-[480px] space-y-3 px-2 pb-6 pt-2">
       <Nav />
-      <h1 className="text-xl">Discovery 5x5</h1>
-      <p className="card">Shown today: {shownCount}/25 | Likes left: {quota?.likesRemaining ?? 0}/5</p>
-      {limitReached ? <p className="card">Daily profile limit reached. Come back after local midnight.</p> : null}
-      <div className="grid grid-cols-5 gap-1">
-        {candidates.slice(0, 25).map((p) => {
-          const queueCount = pendingCountByUserId.get(p.id) ?? 0;
-          const warning = p.mps - user.mps > 2.5 || queueCount > 50
-            ? 'Based on current demand and your Market Placement, you may be positioned lower in this queue. To move up, complete Roadmap Tasks to optimize resonance or maintain high Reliability.'
-            : null;
-          const matchProbability = matchProbabilityByUserId.get(p.id) ?? 0;
-          return (
-            <div key={p.id} className="card p-2 text-[10px]">
-              <img src={p.profile?.photoMainUrl} alt="profile" className="h-12 w-full rounded object-cover" />
-              <p>MPS: {displayMpsOrCalibrating(p.mps, p.impressions_count)}</p>
-              <p>Reliability: {Math.round(p.reliability * 100)}%</p>
-              {user.isPremium ? <p>Match Chance: {matchProbability}%</p> : null}
-              {warning ? <p className="text-amber-300">{warning}</p> : null}
-              {p.profile?.verificationStatus === 'passed' ? <p className="text-sky-300">Blue Tint badge</p> : null}
-              <form action="/api/like" method="post">
-                <input type="hidden" name="toUserId" value={p.id} />
-                <input type="hidden" name="type" value="strong" />
-                <button className="underline">Strong Like</button>
-              </form>
-              <form action="/api/like" method="post">
-                <input type="hidden" name="toUserId" value={p.id} />
-                <input type="hidden" name="type" value="direct" />
-                <button className="underline">Direct Like</button>
-              </form>
-              <form action="/api/like" method="post">
-                <input type="hidden" name="toUserId" value={p.id} />
-                <input type="hidden" name="type" value="invisible" />
-                <button className="underline">Invisible Like</button>
-              </form>
-              <form action="/api/pass" method="post">
-                <input type="hidden" name="targetUserId" value={p.id} />
-                <button className="underline">Pass</button>
-              </form>
-              <form action="/api/hide-profile" method="post">
-                <input type="hidden" name="hiddenUserId" value={p.id} />
-                <button className="underline">Never see again</button>
-              </form>
-            </div>
-          );
-        })}
-      </div>
+      <DiscoveryFeed
+        profiles={profiles}
+        isPremium={user.isPremium}
+        isAdmin={isAdmin}
+        initialLikesRemaining={likesRemaining}
+        shownCount={shownCount}
+        profileDailyLimit={DAILY_PROFILE_LIMIT}
+        likeDailyLimit={DAILY_LIKE_LIMIT}
+        limitReached={limitReached}
+      />
     </main>
   );
 }

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getSessionUserId } from '@/lib/session-user';
 import Link from 'next/link';
+import { displayMpsOrCalibrating } from '@/services/market';
 
 export default async function LikeDetailPage({ params }: { params: { id: string } }) {
   const userId = await getSessionUserId();
@@ -29,7 +30,7 @@ export default async function LikeDetailPage({ params }: { params: { id: string 
     <main className="space-y-3">
       <h1 className="text-xl">Like Detail</h1>
       <img src={like.fromUser.profile?.photoMainUrl} alt="liker" className="h-64 w-full rounded object-cover" />
-      <p className="card">Sender MPS: {like.fromUser.mps.toFixed(2)}</p>
+      <p className="card">Sender MPS: {displayMpsOrCalibrating(like.fromUser.mps, like.fromUser.impressions_count)}</p>
       <p className="card">Type: {like.type}</p>
       <p className="card">One-Look active: leaving without action moves this like to passed/expired.</p>
       <div className="grid grid-cols-2 gap-2">

@@ -9,7 +9,7 @@ export default async function LikesYouPage() {
   const user = await getSessionUser();
   if (!user) return <p>User not found.</p>;
   const activeMatches = await activeMatchCount(user.id);
-  const atCap = activeMatches >= ACTIVE_CONVERSATION_LIMIT;
+  const atCap = !user.isAdmin && activeMatches >= ACTIVE_CONVERSATION_LIMIT;
 
   const likes = await prisma.like.findMany({
     where: {

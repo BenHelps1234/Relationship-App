@@ -20,7 +20,10 @@ export async function POST(req: Request) {
 
   await prisma.user.update({
     where: { id: userId },
-    data: { isPremium: isPremiumRaw === '1' }
+    data: {
+      isPremium: isPremiumRaw === '1',
+      subscriptionActive: isPremiumRaw === '1'
+    }
   });
 
   redirect('/admin');

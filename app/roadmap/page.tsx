@@ -3,6 +3,8 @@ import { mpsTier, roadmapActions } from '@/lib/mps';
 import { getSessionUser } from '@/lib/session-user';
 import { ensurePeerReviewGateState } from '@/lib/peer-review';
 import { displayMpsOrCalibrating } from '@/services/market';
+import { Suspense } from 'react';
+import RoadmapAdviceSection, { RoadmapAdviceSkeleton } from '@/components/RoadmapAdviceSection';
 
 export default async function RoadmapPage() {
   const user = await getSessionUser();
@@ -49,7 +51,7 @@ export default async function RoadmapPage() {
         </>
       ) : (
         <>
-          <p className="card blur-sm select-none">MPS: 0.00 (Calibrating)</p>
+          <p className="card blur-sm select-none">MPS: 0.00 (Calibrating...)</p>
           <p className="card blur-sm select-none">Reliability: --%</p>
           <p className="card">Reveal My Market Rank</p>
         </>
@@ -63,6 +65,9 @@ export default async function RoadmapPage() {
         <p>Progress log:</p>
         {history.map((h) => <p key={h.id} className="text-xs">{h.timestamp.toISOString()}: {h.mpsValue.toFixed(2)}</p>)}
       </div>
+      <Suspense fallback={<RoadmapAdviceSkeleton />}>
+        <RoadmapAdviceSection user={user} />
+      </Suspense>
       <div className="space-y-2">
         <p className="font-semibold">Peer review queue (photo only, anonymous, Yes/No)</p>
         {gate.bypassedDueToExhaustion && gate.message ? <p className="card">{gate.message}</p> : null}

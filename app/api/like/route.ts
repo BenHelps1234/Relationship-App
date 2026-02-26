@@ -24,7 +24,7 @@ function likeTypeRank(type: LikeTypeValue): number {
 }
 
 function likeWeight(type: LikeTypeValue): number {
-  return type === 'strong' ? 1.5 : 1.0;
+  return type === 'strong' ? 2 : 1;
 }
 
 function likeCountWeight(type: LikeTypeValue): number {
@@ -53,11 +53,11 @@ export async function POST(req: Request) {
   const requestedType = parseLikeType(form.get('type'));
   if (!toUserId || toUserId === user.id) return new Response('Invalid target user', { status: 400 });
 
-  if (!user.dailyQuota || user.dailyQuota.likesRemaining <= 0) {
+  if (!user.isAdmin && (!user.dailyQuota || user.dailyQuota.likesRemaining <= 0)) {
     console.info(`[like] daily quota block user=${user.id}`);
     return new Response('Daily like limit reached.', { status: 400 });
   }
-  if (await activeMatchCount(user.id) >= ACTIVE_CONVERSATION_LIMIT) {
+  if (!user.isAdmin && await activeMatchCount(user.id) >= ACTIVE_CONVERSATION_LIMIT) {
     return new Response('You already have 5 active matches. Resolve one before liking.', { status: 400 });
   }
 
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
 
   const result = await prisma.$transaction(async (tx) => {
     const requesterActiveCountPre = await activeMatchCount(user.id, tx);
-    if (requesterActiveCountPre >= ACTIVE_CONVERSATION_LIMIT) {
+    if (!user.isAdmin && requesterActiveCountPre >= ACTIVE_CONVERSATION_LIMIT) {
       return { kind: 'requester-at-cap' as const };
     }
 
@@ -75,7 +75,7 @@ export async function POST(req: Request) {
       return { kind: 'invalid-target' as const };
     }
     const targetActiveCountPre = await activeMatchCount(toUserId, tx);
-    if (targetActiveCountPre >= ACTIVE_CONVERSATION_LIMIT) {
+    if (!user.isAdmin && targetActiveCountPre >= ACTIVE_CONVERSATION_LIMIT) {
       return { kind: 'target-at-cap' as const };
     }
 
@@ -121,7 +121,9 @@ export async function POST(req: Request) {
     }
 
     if (consumedLike) {
-      await tx.dailyQuota.update({ where: { userId: user.id }, data: { likesRemaining: { decrement: 1 } } });
+      if (!user.isAdmin) {
+        await tx.dailyQuota.update({ where: { userId: user.id }, data: { likesRemaining: { decrement: 1 } } });
+      }
       await incrementDailyLikesReceived(toUserId, tx);
       await tx.user.update({
         where: { id: toUserId },
@@ -140,7 +142,7 @@ export async function POST(req: Request) {
     if (reciprocal && reciprocal.status === 'pending' && reciprocal.expiresAt > now) {
       const requesterActiveCount = await activeMatchCount(user.id, tx);
       const targetActiveCount = await activeMatchCount(toUserId, tx);
-      if (requesterActiveCount < ACTIVE_CONVERSATION_LIMIT && targetActiveCount < ACTIVE_CONVERSATION_LIMIT) {
+      if (user.isAdmin || (requesterActiveCount < ACTIVE_CONVERSATION_LIMIT && targetActiveCount < ACTIVE_CONVERSATION_LIMIT)) {
         await tx.like.updateMany({
           where: {
             OR: [

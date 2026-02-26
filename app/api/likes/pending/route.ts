@@ -8,7 +8,8 @@ export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  if (await activeMatchCount(userId) >= ACTIVE_CONVERSATION_LIMIT) {
+  const actor = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+  if (!actor?.isAdmin && await activeMatchCount(userId) >= ACTIVE_CONVERSATION_LIMIT) {
     return NextResponse.json({ error: 'Locked', status: 'LOCKED' }, { status: 403 });
   }
 

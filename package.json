@@ -14,6 +14,7 @@
     "cron:daily": "tsx scripts/daily-reset.ts",
     "cron:expire-likes": "tsx scripts/expire-likes.ts",
     "cron:expire-conversations": "tsx scripts/expire-conversations.ts",
+    "cron:expire-unfreeze-requests": "tsx scripts/expire-unfreeze-requests.ts",
     "cron:reliability": "tsx scripts/update-reliability.ts",
     "test": "tsx --test tests/domain-rules.test.ts"
   },

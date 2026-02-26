@@ -1,0 +1,2 @@
+ALTER TABLE "User" ADD COLUMN "roadmapBucketIds" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "User" ADD COLUMN "roadmapGeneratedAt" DATETIME;

@@ -24,6 +24,6 @@ export async function getSessionUser() {
     where: { id: userId },
     include: { profile: true, dailyQuota: true }
   });
-  if (!user || user.accountStatus !== 'active') return null;
+  if (!user || user.accountStatus === 'banned') return null;
   return user;
 }

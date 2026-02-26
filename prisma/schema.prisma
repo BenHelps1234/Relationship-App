@@ -81,15 +81,18 @@ model User {
   reliability               Float              @default(0)
   impressionsCount          Int                @default(0)
   likesCount                Int                @default(0)
-  likesReceivedCount        Float              @default(0)
+  likesReceivedCount        Int                @default(0)
   basePotentialScore        Float              @default(5.0)
   basePotential             Float              @default(5.0)
   isAdmin                   Boolean            @default(false)
   isPremium                 Boolean            @default(false)
+  subscriptionActive        Boolean            @default(false)
   ghostPenaltyAppliedAt     DateTime?
   impressions_count         Int                @default(0)
   likes_received_count      Int                @default(0)
   scoreSafety               Float              @default(1.0)
+  roadmapBucketIds          String             @default("[]")
+  roadmapGeneratedAt        DateTime?
   createdAt                 DateTime           @default(now())
   updatedAt                 DateTime           @updatedAt
   peerReviewBypassUntil     DateTime?

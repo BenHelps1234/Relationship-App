@@ -29,41 +29,48 @@ declare namespace __next_route_internal_types__ {
     S extends `${string}${SearchOrHash}` ? never : S
 
   type StaticRoutes = 
-    | `/`
+    | `/api/admin/boost-signals`
     | `/admin`
-    | `/api/freeze`
-    | `/api/contact/propose`
+    | `/api/admin/reliability-override`
+    | `/api/admin/grant-premium`
     | `/api/contact/accept`
-    | `/api/filters`
     | `/api/cron/daily-reset`
-    | `/api/cron/expire-likes`
+    | `/api/contact/propose`
     | `/api/cron/expire-conversations`
+    | `/api/cron/expire-likes`
+    | `/api/discovery`
+    | `/api/filters`
     | `/api/hide-profile`
-    | `/api/message`
+    | `/api/freeze`
     | `/api/like`
-    | `/api/onboarding`
+    | `/api/likes/pending`
+    | `/api/message`
     | `/api/pass`
+    | `/api/onboarding`
     | `/api/peer-review`
+    | `/api/strong-like-respond`
     | `/api/video-date/complete`
     | `/api/video-date/propose`
-    | `/api/video-date/schedule`
-    | `/api/strong-like-respond`
     | `/api/unmatch`
+    | `/api/video-date/schedule`
     | `/api/waitlist-review`
-    | `/conversations`
     | `/auth`
+    | `/conversations`
+    | `/filters`
     | `/discovery`
     | `/freeze`
-    | `/filters`
-    | `/likes-you`
     | `/onboarding`
+    | `/`
+    | `/likes-you`
     | `/profile`
     | `/roadmap`
-    | `/strong-likes`
     | `/waitlist`
+    | `/strong-likes`
   type DynamicRoutes<T extends string = string> = 
     | `/api/auth/${CatchAllSlug<T>}`
+    | `/api/likes/pending/${SafeSlug<T>}`
     | `/conversations/${SafeSlug<T>}`
+    | `/likes-you/${SafeSlug<T>}`
 
   type RouteImpl<T> = 
     | StaticRoutes
